@@ -32,13 +32,26 @@ return {
 		config = function()
 			require("catppuccin").setup({
 				flavour = "frappe", -- Choose "latte", "frappe", "macchiato", "mocha"
+				color_overrides = {
+					frappe = {
+						base = "#272C36", -- main background
+						mantle = "#272C36", -- secondary background
+						crust = "#272C36", -- outer borders / deepest bg
+					},
+				},
+				custom_highlights = function(colors)
+					return {
+						Normal = { bg = colors.base },
+						NormalFloat = { bg = colors.base },
+						StatusLine = { bg = colors.base },
+					}
+				end,
 				integrations = {
 					treesitter = true,
 					telescope = true,
 				},
 			})
-			-- somewhere in your config:
-			-- vim.cmd("colorscheme onedark")
+
 			vim.cmd.colorscheme("catppuccin")
 		end,
 	},

@@ -1,0 +1,117 @@
+-- Make sure to setup `mapleader` and `maplocalleader` before
+-- loading lazy.nvim so that mappings are correct.
+-- This is also a good place to setup other settings (vim.opt)
+vim.g.mapleader = " "
+vim.g.maplocalleader = "\\"
+
+vim.keymap.set("n", "K", "5k", { noremap = true }) -- Move up 5 lines
+vim.keymap.set("n", "J", "5j", { noremap = true }) -- Down up 5 lines
+
+-- Telescope bidings for LSP: Go to definition, references, document symbols, workspace symbols
+vim.keymap.set("n", "<leader>ds", ":Telescope lsp_document_symbols<CR>", { noremap = true, silent = true })
+vim.keymap.set("n", "<leader>ws", ":Telescope lsp_workspace_symbols<CR>", { noremap = true, silent = true })
+
+vim.keymap.set("n", "<leader>%", ":vsplit<CR>", { noremap = true, silent = true }) -- Vertical split
+vim.keymap.set("n", '<leader>"', ":split<CR>", { noremap = true, silent = true }) -- Horizontal split
+
+vim.api.nvim_set_keymap("n", "<M-Tab>", ":b#<CR>", { noremap = true, silent = true })
+vim.keymap.set("n", "<M-Tab>", ":b#<CR>", { noremap = true, silent = true })
+
+-- Center screen when going half page with C-D and C-U
+vim.keymap.set("n", "<C-d>", "<C-d>zz", { noremap = true, silent = true })
+vim.keymap.set("n", "<C-u>", "<C-u>zz", { noremap = true, silent = true })
+
+-- Recommend for avante.nvim: views can only be fully collapsed with the global statusline
+vim.opt.laststatus = 3
+vim.opt.ignorecase = true
+
+vim.keymap.set("n", "]e", vim.diagnostic.goto_next, { desc = "Next error" })
+vim.keymap.set("n", "[e", vim.diagnostic.goto_prev, { desc = "Previous error" })
+vim.keymap.set("n", "<leader>e", vim.diagnostic.goto_next, { desc = "Next error" })
+
+vim.keymap.set("n", "]t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
+vim.keymap.set("n", "[t", ":tabprevious<CR>", { desc = "Previous tab", noremap = true, silent = true })
+vim.keymap.set("n", "<leader>t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
+vim.keymap.set("n", "<leader>tx", ":tabclose<CR>", { desc = "Close tab", noremap = true, silent = true })
+
+vim.keymap.set("n", "]b", ":bnext<CR>", { desc = "Next buffer", noremap = true, silent = true })
+vim.keymap.set("n", "[b", ":bprevious<CR>", { desc = "Previous buffer", noremap = true, silent = true })
+vim.keymap.set("n", "<leader>b", ":bnext<CR>", { desc = "Next buffer", noremap = true, silent = true })
+-- It is a bit annoying but we cannot use <leader>bx here, because it <leader>b is used to show active buffers (bx makes the execution of b wait for another key)
+vim.keymap.set("n", "<leader><leader>bx", ":bwipeout<CR>", { desc = "Wipeout Buffer" }) -- Wipe buffer completely
+
+-- Close all buffers
+vim.keymap.set("n", "<leader><leader>ba", ":bufdo bwipeout<CR>", { desc = "Close all buffers" })
+
+vim.keymap.set("n", "<leader>se", function()
+	vim.diagnostic.open_float(nil, {
+		focusable = false, -- Don't steal focus
+		close_events = { "BufLeave", "CursorMoved", "InsertEnter" }, -- Auto-close when moving
+		border = "rounded", -- Rounded corners
+		source = "always", -- Show source of the message
+		prefix = "● ", -- Adds a bullet point for style
+	})
+end, { desc = "Show diagnostics for current line" })
+
+
+vim.keymap.set("n", "<leader>e", function()
+	require("mini.files").open(vim.fn.expand("%:p:h"))
+end, { desc = "Open mini.files at current file's directory" })
+
+vim.keymap.set("n", "<leader>E", function()
+	require("mini.files").open()
+end, { desc = "Open Mini Files" })
+
+
+-- This remaps the Ctrl + S to Ctrl + A
+-- We do this because we use Ctrl + S as the leader key for tmux
+vim.keymap.set("n", "+", "<C-a>", { desc = "Increment numbers" })
+vim.keymap.set("n", "-", "<C-x>", { desc = "Decrement numbers" })
+vim.keymap.set("v", "+", "<C-a>gv", { desc = "Increment numbers" })
+vim.keymap.set("v", "-", "<C-x>gv", { desc = "Decrement numbers" })
+
+vim.keymap.set("n", "g+", "g<C-a>", { desc = "Increment numbers" })
+vim.keymap.set("n", "g-", "g<C-x>", { desc = "Decrement numbers" })
+vim.keymap.set("v", "g+", "g<C-a>gv", { desc = "Increment numbers" })
+vim.keymap.set("v", "g-", "g<C-x>gv", { desc = "Decrement numbers" })
+
+
+vim.keymap.set("n", "<Leader>j", "J", { noremap = true }) -- Join lines
+
+-- Command mode keybindings
+vim.keymap.set("c", "<Leader>w", ":wa<CR>", { noremap = true, silent = true }) -- Save all files
+
+-- Insert mode keybindings (non-recursive)
+vim.keymap.set("i", "jk", "<Esc>", { noremap = true }) -- Escape insert mode by pressing 'jk'
+
+-- Normal mode: Add selection to next find match (requires 'vim-visual-multi' or similar plugin)
+vim.keymap.set(
+	"n",
+	"<Leader>*",
+	':lua require("vim-visual-multi").add_selection_to_next_find_match()<CR>',
+	{ noremap = true, silent = true }
+)
+
+-- Add keybindings to navigat between nvim windows easier
+vim.keymap.set("n", "<C-k>", "<C-w>k", { noremap = true, silent = true })
+vim.keymap.set("n", "<C-j>", "<C-w>j", { noremap = true, silent = true })
+vim.keymap.set("n", "<C-h>", "<C-w>h", { noremap = true, silent = true })
+vim.keymap.set("n", "<C-l>", "<C-w>l", { noremap = true, silent = true })
+
+-- Yank to system clipboard by default
+vim.keymap.set("n", "y", '"+y', { noremap = true })
+vim.keymap.set("v", "y", '"+y', { noremap = true })
+vim.keymap.set("n", "yy", '"+yy', { noremap = true })
+vim.keymap.set("n", "Y", '"+Y', { noremap = true })
+
+-- Delete to system clipboard by default
+vim.keymap.set("n", "d", '"+d', { noremap = true })
+vim.keymap.set("v", "d", '"+d', { noremap = true })
+
+-- Paste from system clipboard
+vim.keymap.set("n", "p", '"+p', { noremap = true })
+vim.keymap.set("n", "P", '"+P', { noremap = true })
+
+-- Map gA to work like g<C-a>
+-- The problem is when using neovim in tmux as Ctrl a is the chosen leader prefix there...
+-- vim.api.nvim_set_keymap('x', 'gA', 'g<C-a>', {noremap = true})
