@@ -7,8 +7,8 @@ vim.opt.number = true
 vim.opt.cursorline = false
 
 -- Show whitespace characters
-vim.opt.list = true
-vim.opt.listchars = { tab = "» ", trail = "·", nbsp = "␣" }
+-- vim.opt.list = true
+-- vim.opt.listchars = { tab = "» ", trail = "·", nbsp = "␣" }
 
 -- Search
 vim.opt.ignorecase = true
@@ -20,12 +20,6 @@ vim.opt.inccommand = "split"
 -- Text wrapping
 vim.opt.wrap = true
 vim.opt.breakindent = true
-
--- Tabstops
-vim.opt.expandtab = true
-vim.opt.tabstop = 2
-vim.opt.softtabstop = 2
-vim.opt.shiftwidth = 2
 
 -- Window splitting
 vim.opt.splitright = true

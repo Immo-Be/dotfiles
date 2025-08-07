@@ -30,16 +30,6 @@ return {
 
 		local lspconfig = require("lspconfig")
 
-		-- Lua LSP
-		lspconfig.lua_ls.setup({
-			capabilities = capabilities,
-			settings = {
-				Lua = {
-					diagnostics = { globals = { "vim" } },
-				},
-			},
-		})
-
 		-- Astro LSP
 		lspconfig.astro.setup({
 			capabilities = capabilities,
@@ -66,6 +56,20 @@ return {
 			telescope_builtin.lsp_references,
 			{ noremap = true, silent = true, desc = "Telescope LSP References" }
 		)
+
+		-- Lua LSP
+    -- this is the new way to configure language servers using the builtin vim.lsp.config interface.
+    -- i should re-implement the lspconfig setup using this method.
+		vim.lsp.config("lua_ls", {
+			settings = {
+				Lua = {
+					diagnostics = {
+						globals = { "vim" },
+					},
+				},
+			},
+		})
+
 		vim.keymap.set("n", "<C-e>", vim.lsp.buf.hover, {})
 		vim.keymap.set("n", "gd", vim.lsp.buf.definition, {})
 		vim.keymap.set("n", "gD", vim.lsp.buf.declaration, {})

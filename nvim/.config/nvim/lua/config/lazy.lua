@@ -15,7 +15,6 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
-
 -- improve display of diagnostics
 vim.diagnostic.config({
 	virtual_text = true, -- Disable inline text (too messy)
@@ -28,23 +27,22 @@ vim.diagnostic.config({
 	severity_sort = true, -- Show errors first
 })
 
-
 -- Show diagnostics in a floating window automatically
-vim.o.updatetime = 2000 -- Reduce delay before showing diagnostics
-vim.api.nvim_create_autocmd("CursorHold", {
-	pattern = "*",
-	callback = function()
-		vim.diagnostic.open_float(nil, { focusable = false, border = "rounded" })
-	end,
-})
+-- vim.o.updatetime = 2000 -- Reduce delay before showing diagnostics
+-- vim.api.nvim_create_autocmd("CursorHold", {
+-- 	pattern = "*",
+-- 	callback = function()
+-- 		vim.diagnostic.open_float(nil, { focusable = false, border = "rounded" })
+-- 	end,
+-- })
+--
+-- local signs = { Error = "❗", Warn = "⚠️", Hint = "💡", Info = "ℹ️" }
+-- for type, icon in pairs(signs) do
+-- 	local hl = "DiagnosticSign" .. type
+-- 	vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
+-- end
 
-local signs = { Error = "❗", Warn = "⚠️", Hint = "💡", Info = "ℹ️" }
-for type, icon in pairs(signs) do
-	local hl = "DiagnosticSign" .. type
-	vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
-end
-
-
+vim.opt.numberwidth = 2
 
 -- Setup lazy.nvim
 require("lazy").setup({
