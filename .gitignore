@@ -1,2 +1,27 @@
+# Git internals
+.git/
+
+# Stow safety
+.stow-local-ignore
+*/.stow-local-ignore
+
 # macOS Finder metadata
 .DS_Store
+
+# tmux plugins are installed via the Tmux Plugin Manager (TPM)
+tmux/.tmux/plugins/
+
+# Vim / Neovim swap/backup/session files
+*.swp
+*.swo
+*.swn
+Session.vim
+.netrwhist
+
+# Cache files
+.cache/
+.config/*/cache/
+tmp/
+
+# OS-specific trash
+.Trash
