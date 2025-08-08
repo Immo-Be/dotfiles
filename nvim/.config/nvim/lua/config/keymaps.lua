@@ -53,7 +53,6 @@ vim.keymap.set("n", "<leader>se", function()
 	})
 end, { desc = "Show diagnostics for current line" })
 
-
 vim.keymap.set("n", "<leader>e", function()
 	require("mini.files").open(vim.fn.expand("%:p:h"))
 end, { desc = "Open mini.files at current file's directory" })
@@ -61,7 +60,6 @@ end, { desc = "Open mini.files at current file's directory" })
 vim.keymap.set("n", "<leader>E", function()
 	require("mini.files").open()
 end, { desc = "Open Mini Files" })
-
 
 -- This remaps the Ctrl + S to Ctrl + A
 -- We do this because we use Ctrl + S as the leader key for tmux
@@ -75,7 +73,6 @@ vim.keymap.set("n", "g-", "g<C-x>", { desc = "Decrement numbers" })
 vim.keymap.set("v", "g+", "g<C-a>gv", { desc = "Increment numbers" })
 vim.keymap.set("v", "g-", "g<C-x>gv", { desc = "Decrement numbers" })
 
-
 vim.keymap.set("n", "<Leader>j", "J", { noremap = true }) -- Join lines
 
 -- Command mode keybindings
@@ -84,33 +81,32 @@ vim.keymap.set("c", "<Leader>w", ":wa<CR>", { noremap = true, silent = true }) -
 -- Insert mode keybindings (non-recursive)
 vim.keymap.set("i", "jk", "<Esc>", { noremap = true }) -- Escape insert mode by pressing 'jk'
 
--- Normal mode: Add selection to next find match (requires 'vim-visual-multi' or similar plugin)
-vim.keymap.set(
-	"n",
-	"<Leader>*",
-	':lua require("vim-visual-multi").add_selection_to_next_find_match()<CR>',
-	{ noremap = true, silent = true }
-)
-
 -- Add keybindings to navigat between nvim windows easier
 vim.keymap.set("n", "<C-k>", "<C-w>k", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-j>", "<C-w>j", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-h>", "<C-w>h", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-l>", "<C-w>l", { noremap = true, silent = true })
 
--- Yank to system clipboard by default
+-- Yank / delete to system clipboard by default
 vim.keymap.set("n", "y", '"+y', { noremap = true })
 vim.keymap.set("v", "y", '"+y', { noremap = true })
 vim.keymap.set("n", "yy", '"+yy', { noremap = true })
 vim.keymap.set("n", "Y", '"+Y', { noremap = true })
 
--- Delete to system clipboard by default
-vim.keymap.set("n", "d", '"+d', { noremap = true })
+vim.keymap.set("", "d", '"+d', { noremap = true })
 vim.keymap.set("v", "d", '"+d', { noremap = true })
 
--- Paste from system clipboard
-vim.keymap.set("n", "p", '"+p', { noremap = true })
-vim.keymap.set("n", "P", '"+P', { noremap = true })
+-- --- ADD THESE LINES FOR IN-LINE PASTE ---
+-- "Put" from system clipboard without creating a new line
+-- The `g` prefix tells Neovim to put the text after the cursor.
+-- vim.keymap.set("n", "<leader>p", '"+gp', { noremap = true })
+-- vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
+
+-- --- OR, REMAP 'p' AND 'P' DIRECTLY ---
+-- This might feel more intuitive if you always want this behavior.
+-- However, it will remove the default Neovim 'p' and 'P' behavior.
+vim.keymap.set("n", "p", '"+gp', { noremap = true })
+vim.keymap.set("n", "P", '"+gP', { noremap = true })
 
 -- Map gA to work like g<C-a>
 -- The problem is when using neovim in tmux as Ctrl a is the chosen leader prefix there...

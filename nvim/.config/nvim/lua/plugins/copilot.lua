@@ -37,7 +37,7 @@ return {
 				copilot_gpt = {
 					__inherited_from = "copilot",
 					request = {
-						model = "gpt-4o",
+						model = "gpt-5",
 					},
 				},
 				copilot_claude = {
