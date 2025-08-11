@@ -45,9 +45,9 @@ return {
 				},
 				pickers = {
 					find_files = {
-						-- add "--no-ignore" to show all files, including gitignored ones
-						find_command = { "rg", "--files", "--hidden" },
-						hidden = true, -- ✅ Show hidden files
+						-- add "--no-ignore" to show all files, except .git folder
+						find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*" },
+						hidden = true, -- ✅ Show hidden files excluding .git
 					},
 				},
 				extensions = {

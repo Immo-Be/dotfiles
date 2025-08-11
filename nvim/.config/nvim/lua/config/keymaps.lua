@@ -93,20 +93,25 @@ vim.keymap.set("v", "y", '"+y', { noremap = true })
 vim.keymap.set("n", "yy", '"+yy', { noremap = true })
 vim.keymap.set("n", "Y", '"+Y', { noremap = true })
 
-vim.keymap.set("", "d", '"+d', { noremap = true })
 vim.keymap.set("v", "d", '"+d', { noremap = true })
+vim.keymap.set("n", "d", '"+d', { noremap = true })
+vim.keymap.set("n", "dd", '"+dd', { noremap = true })
 
 -- --- ADD THESE LINES FOR IN-LINE PASTE ---
 -- "Put" from system clipboard without creating a new line
 -- The `g` prefix tells Neovim to put the text after the cursor.
--- vim.keymap.set("n", "<leader>p", '"+gp', { noremap = true })
--- vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
+vim.keymap.set("n", "<leader>p", '"+gp', { noremap = true })
+vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
 
 -- --- OR, REMAP 'p' AND 'P' DIRECTLY ---
 -- This might feel more intuitive if you always want this behavior.
 -- However, it will remove the default Neovim 'p' and 'P' behavior.
-vim.keymap.set("n", "p", '"+gp', { noremap = true })
-vim.keymap.set("n", "P", '"+gP', { noremap = true })
+-- vim.keymap.set("n", "p", '"+gp', { noremap = true })
+-- vim.keymap.set("n", "P", '"+gP', { noremap = true })
+
+
+-- undotree toggle
+vim.keymap.set('n', '<leader><F5>', vim.cmd.UndotreeToggle)
 
 -- Map gA to work like g<C-a>
 -- The problem is when using neovim in tmux as Ctrl a is the chosen leader prefix there...

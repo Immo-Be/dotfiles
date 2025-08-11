@@ -27,3 +27,7 @@ vim.opt.splitbelow = true
 
 -- Save undo history
 vim.opt.undofile = true
+
+-- Enable spell checking
+vim.opt.spell = true
+vim.opt.spelllang = { "en_us", "de_de" }
