@@ -109,10 +109,10 @@ vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
 -- vim.keymap.set("n", "p", '"+gp', { noremap = true })
 -- vim.keymap.set("n", "P", '"+gP', { noremap = true })
 
-
 -- undotree toggle
-vim.keymap.set('n', '<leader><F5>', vim.cmd.UndotreeToggle)
+vim.keymap.set("n", "<leader><F5>", vim.cmd.UndotreeToggle)
 
+--
 -- Map gA to work like g<C-a>
 -- The problem is when using neovim in tmux as Ctrl a is the chosen leader prefix there...
 -- vim.api.nvim_set_keymap('x', 'gA', 'g<C-a>', {noremap = true})
