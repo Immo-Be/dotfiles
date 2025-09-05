@@ -43,6 +43,12 @@ vim.keymap.set("n", "<leader><leader>bx", ":bwipeout<CR>", { desc = "Wipeout Buf
 -- Close all buffers
 vim.keymap.set("n", "<leader><leader>ba", ":bufdo bwipeout<CR>", { desc = "Close all buffers" })
 
+-- remap=true so we can reuse the existing "[r" motion
+-- jumps to the last return() in the buffer
+-- Potentially useful for jsx files
+vim.keymap.set("n", "<leader>r", "G[r", { remap = true, desc = "Jump to last return() in buffer" })
+
+
 vim.keymap.set("n", "<leader>se", function()
 	vim.diagnostic.open_float(nil, {
 		focusable = false, -- Don't steal focus
@@ -112,7 +118,16 @@ vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
 -- undotree toggle
 vim.keymap.set("n", "<leader><F5>", vim.cmd.UndotreeToggle)
 
---
+-- Git related keymaps
+vim.keymap.set("n", "<leader>hg", ":DiffviewFileHistory %<CR>", {
+  desc = "Git file history (current file)",
+  silent = true,
+})
+
+vim.keymap.set("n", "<leader>hG", ":DiffviewFileHistory<CR>", {
+  desc = "Git history (project)",
+  silent = true,
+})
 -- Map gA to work like g<C-a>
 -- The problem is when using neovim in tmux as Ctrl a is the chosen leader prefix there...
 -- vim.api.nvim_set_keymap('x', 'gA', 'g<C-a>', {noremap = true})
