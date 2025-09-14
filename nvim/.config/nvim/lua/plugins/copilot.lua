@@ -13,31 +13,24 @@ return {
 		opts = {
 			-- add any opts here
 			-- this file can contain specific instructions for your project
-			instructions_file = "avante.md",
 			provider = "copilot",
 			providers = {
-				copilot = {
+				copilot_test = {
 					__inherited_from = "copilot",
 					request = {
-						model = "claude-3.7-sonnet",
+						model = "gpt-iasdf-2025-08-07",
 					},
 				},
-				copilot_claude_thought = {
+				copilot_5 = {
 					__inherited_from = "copilot",
 					request = {
-						model = "claude-3.7-sonnet-thought",
+						model = "gpt-5-2025-08-07",
 					},
 				},
-				copilot_gpt = {
+				copilot_5_mini = {
 					__inherited_from = "copilot",
 					request = {
-						model = "gpt-5",
-					},
-				},
-				copilot_claude = {
-					__inherited_from = "copilot",
-					request = {
-						model = "claude-3.7-sonnet",
+						model = "gpt-5-mini-2025-08-07",
 					},
 				},
 			},

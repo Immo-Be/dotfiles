@@ -1,136 +1,142 @@
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block; everything else may go below.
+
+#######################################################################
+# Requirements for this ~/.zshrc (manual installs via Homebrew)
+#
+# Core utilities:
+#   brew install fzf ripgrep bat eza zoxide
+#
+# Shell enhancements:
+#   brew install zsh-autosuggestions zsh-syntax-highlighting
+#
+# Prompt theme (choose one):
+#   brew install romkatv/powerlevel10k/powerlevel10k
+#   # or brew install starship (if you prefer Starship instead of p10k)
+#
+# Version managers:
+#   brew install nvm pyenv
+#
+# Notes:
+#   - fzf: fuzzy finder (Ctrl-R, `zi` with zoxide, etc.)
+#   - ripgrep: fast recursive grep (`rg`)
+#   - bat: cat with syntax highlighting (`bat`)
+#   - eza: modern ls replacement (`ls`/`ll`)
+#   - zoxide: smarter cd (`z`, `zi`, `j`)
+#   - zsh-autosuggestions + zsh-syntax-highlighting: command hints & colors
+#   - nvm: Node.js version manager (lazy-loaded in this config)
+#   - pyenv: Python version manager
+#   - powerlevel10k: prompt theme (already configured below)
+#
+# After installing, reload this file with: source ~/.zshrc
+#######################################################################
+
+
+##### p10k instant prompt — keep at very top
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
+# Optional: silence warning without disabling
+typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
 
-# Path to your oh-my-zsh installation.
+##### Homebrew prefix (Apple Silicon)
+HOMEBREW_PREFIX="/opt/homebrew"
+export PATH="$HOMEBREW_PREFIX/bin:$PATH"
+
+##### Oh My Zsh + theme
 export ZSH="$HOME/.oh-my-zsh"
-
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time oh-my-zsh is loaded, in which case,
-# to know which specific one was loaded, run: echo $RANDOM_THEME
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 ZSH_THEME="powerlevel10k/powerlevel10k"
-
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in $ZSH/themes/
-# If set to an empty array, this variable will have no effect.
-# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
-
-# Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
-
-# Uncomment the following line to use hyphen-insensitive completion.
-# Case-sensitive completion must be off. _ and - will be interchangeable.
-# HYPHEN_INSENSITIVE="true"
-
-# Uncomment one of the following lines to change the auto-update behavior
-# zstyle ':omz:update' mode disabled  # disable automatic updates
-# zstyle ':omz:update' mode auto      # update automatically without asking
-# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
-
-# Uncomment the following line to change how often to auto-update (in days).
-# zstyle ':omz:update' frequency 13
-
-# Uncomment the following line if pasting URLs and other text is messed up.
-# DISABLE_MAGIC_FUNCTIONS="true"
-
-# Uncomment the following line to disable colors in ls.
-# DISABLE_LS_COLORS="true"
-
-# Uncomment the following line to disable auto-setting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment the following line to enable command auto-correction.
-# ENABLE_CORRECTION="true"
-
-# Uncomment the following line to display red dots whilst waiting for completion.
-# You can also set it to another string to have that shown instead of the default red dots.
-# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
-# Caution: this setting can cause issues with multiline prompts in zsh < 5.7.1 (see #5765)
-# COMPLETION_WAITING_DOTS="true"
-
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
-
-# Uncomment the following line if you want to change the command execution time
-# stamp shown in the history command output.
-# You can set one of the optional three formats:
-# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
-# or set a custom format using the strftime function format specifications,
-# see 'man strftime' for details.
-# HIST_STAMPS="mm/dd/yyyy"
-
-# Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
-
-# Which plugins would you like to load?
-# Standard plugins can be found in $ZSH/plugins/
-# Custom plugins may be added to $ZSH_CUSTOM/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-# Add wisely, as too many plugins slow down shell startup.
 plugins=(git zsh-autosuggestions zsh-syntax-highlighting web-search)
+source "$ZSH/oh-my-zsh.sh"   # <-- this already runs compinit
 
-source $ZSH/oh-my-zsh.sh
 
-# User configuration
+# Use vi keybindings in ZLE (command line editor)
+bindkey -v
 
-# export MANPATH="/usr/local/man:$MANPATH"
+# Make ESC show you're in normal mode by changing the cursor shape (optional)
+# (works in iTerm2, kitty, Alacritty, most modern terminals)
+function zle-keymap-select {
+  case $KEYMAP in
+    vicmd)      echo -ne '\e[1 q' ;;  # block cursor in NORMAL mode
+    viins|main) echo -ne '\e[0 q' ;;  # default cursor in INSERT mode
+  esac
+}
+zle -N zle-keymap-select
+zle-line-init() { zle -K viins; zle-keymap-select }
+zle -N zle-line-init
+echo -ne '\e[5 q'  # default to beam on shell startup
 
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
+##### Google Cloud SDK (quiet)
+[[ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]] && source "$HOME/google-cloud-sdk/path.zsh.inc" >/dev/null 2>&1
 
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
+##### QoL shell options
+setopt autocd autopushd pushdignoredups pushdsilent
+setopt no_beep noclobber interactivecomments
+setopt histignoredups histignorespace sharehistory
+setopt extendedglob correct
 
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
+##### Completion styling (keep, but don't rerun compinit)
+zstyle ':completion:*' menu select
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}' 'r:|=*' 'l:|=*'
+zstyle ':completion:*:descriptions' format '%F{yellow}%d%f'
 
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
-#
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
+##### fzf (key-bindings + completion)
+[[ -r "$HOMEBREW_PREFIX/opt/fzf/shell/key-bindings.zsh" ]] && source "$HOMEBREW_PREFIX/opt/fzf/shell/key-bindings.zsh"
+[[ -r "$HOMEBREW_PREFIX/opt/fzf/shell/completion.zsh"    ]] && source "$HOMEBREW_PREFIX/opt/fzf/shell/completion.zsh"
 
-# The next line updates PATH for the Google Cloud SDK.
-source /Users/immo/google-cloud-sdk/path.zsh.inc
+##### zoxide — smarter cd
+eval "$(zoxide init zsh)"
+alias j='zi'
 
-# Load nvm Automatically in New Shells
-# This ensures node can be automatically loaded in every shell session
-# (With Tmux, we also have to adapt the ~/.tmux.conf to make this work)
+##### Aliases
+alias ..="cd .."
+alias ...="cd ../.."
+alias ....="cd ../../.."
+alias ll="ls -lah"
+# alias ls="eza -F --group --icons"
+# alias ll="eza -lah --group --icons"
+
+##### zsh-autosuggestions — accept suggestion with Ctrl+L
+bindkey '^L' autosuggest-accept
+
+##### Powerlevel10k prompt
+[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+
+##### nvm — true lazy load, no precmd hook
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+export NVM_DEFAULT="lts/*"   # or set a concrete version like "v22.11.0"
+__nvm_loaded=0
+_load_nvm() {
+  [[ $__nvm_loaded == 1 ]] && return
+  [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
+  [[ -s "$NVM_DIR/bash_completion" ]] && . "$NVM_DIR/bash_completion"
+  __nvm_loaded=1
+  # Switch once to default (fast if already active; no per-prompt penalty)
+  if [[ -n "$NVM_DEFAULT" ]] && command -v nvm >/dev/null 2>&1; then
+    # Only switch if not already on a matching version
+    if ! nvm current | grep -qE "$(nvm version "$NVM_DEFAULT" 2>/dev/null | sed 's/[.^$*+?()[\]{}|]/\\&/g')"; then
+      nvm use "$NVM_DEFAULT" >/dev/null 2>&1
+    fi
+  fi
+}
+for cmd in node npm npx pnpm corepack; do
+  eval "
+  $cmd() {
+    _load_nvm
+    command $cmd \"\$@\"
+  }"
+done
 
-nvm use default > /dev/null
-
-export PATH="$HOME/opt/homebrew/opt/fzf:$PATH"
-export PATH="$HOME/opt/homebrew/opt/ripgrep:$PATH"
-export PATH="$HOME/opt/homebrew/opt/bat:$PATH"
-
-export PATH="$HOME/bin:$PATH"
-
-# Accept autosuggestion with Ctrl + L
- bindkey '^N' autosuggest-accept
-
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-
-
+##### pyenv
+#
+##### pyenv — fast init (no rehash during source)
 export PYENV_ROOT="$HOME/.pyenv"
-[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init - zsh)"
+
+# Make pyenv and its shims available.
+if [[ -d "$PYENV_ROOT" ]]; then
+  export PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
+  # Avoid any implicit rehashing during startup
+  export PYENV_DISABLE_REHASH=1
+  # OPTIONAL: if you really want shell functions but not rehash/completions:
+  # command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - 2>/dev/null)" || true
+fi

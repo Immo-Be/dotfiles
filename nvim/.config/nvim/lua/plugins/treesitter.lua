@@ -14,6 +14,12 @@ local M = {
 		config = function()
 			require("nvim-treesitter.configs").setup({
 				ensure_installed = {
+					"markdown",
+					"markdown_inline",
+					"toml",
+					"yaml",
+					"go",
+					"gotmpl",
 					"javascript",
 					"typescript",
 					"tsx", -- TypeScript + React TSX
