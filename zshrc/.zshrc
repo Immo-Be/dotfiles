@@ -1,36 +1,43 @@
 
 #######################################################################
-# Requirements for this ~/.zshrc (manual installs via Homebrew)
+# Cross-Platform Zsh Setup
 #
-# Framework (install first):
-#   sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+# This config works on macOS and Debian/Ubuntu-based Linux.
 #
-# Core utilities:
-#   brew install fzf ripgrep bat eza zoxide
+# --- STEP 1: Install Oh My Zsh ---
+# sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 #
-# Shell enhancements:
-#   brew install zsh-autosuggestions zsh-syntax-highlighting
+# --- STEP 2: Install Dependencies ---
 #
-# Prompt theme (choose one):
+# For macOS (using Homebrew):
+#   brew install fzf ripgrep bat eza zoxide nvm pyenv
 #   brew install romkatv/powerlevel10k/powerlevel10k
-#   # or brew install starship (if you prefer Starship instead of p10k)
 #
-# Version managers:
-#   brew install nvm pyenv
+# For Debian / Ubuntu (using apt):
+#   sudo apt update && sudo apt install -y fzf ripgrep bat zoxide git curl
 #
-# Notes:
-#   - Oh My Zsh: provides the plugin framework and themes
-#   - fzf: fuzzy finder (Ctrl-R, `zi` with zoxide, etc.)
-#   - ripgrep: fast recursive grep (`rg`)
-#   - bat: cat with syntax highlighting (`bat`)
-#   - eza: modern ls replacement (`ls`/`ll`)
-#   - zoxide: smarter cd (`z`, `zi`, `j`)
-#   - zsh-autosuggestions + zsh-syntax-highlighting: command hints & colors
-#   - nvm: Node.js version manager (lazy-loaded in this config)
-#   - pyenv: Python version manager
-#   - powerlevel10k: prompt theme (already configured below)
+#   # Manual installs may be needed for the following on Linux:
+#   # eza: See https://github.com/eza-community/eza/blob/main/INSTALL.md
+#   # nvm: See https://github.com/nvm-sh/nvm#installing-and-updating
+#   # pyenv: See https://github.com/pyenv/pyenv-installer
+#   # p10k: See https://github.com/romkatv/powerlevel10k#oh-my-zsh
 #
-# After installing, reload this file with: source ~/.zshrc
+# --- STEP 3: Reload Shell ---
+#   source ~/.zshrc
+#
+# --- TOOL USAGE NOTES ---
+#   - Oh My Zsh: Manages plugins/themes. Edit ~/.zshrc, then `omz reload`.
+#   - fzf: Fuzzy finder. Press `Ctrl+R` for history, `Ctrl+T` for files.
+#   - ripgrep: Fast grep alternative. Usage: `rg 'pattern' [path]`.
+#   - bat: A `cat` clone. On Debian, may be `batcat`. If so: `alias bat=batcat`.
+#   - eza: Modern `ls`. Aliased to `ls` and `ll` if you uncomment the aliases below.
+#   - zoxide: Smarter `cd`. Aliased to `cd`. Usage: `cd project` to jump.
+#   - zsh-autosuggestions: Suggests commands. Press `Ctrl+L` to accept.
+#   - zsh-syntax-highlighting: Highlights commands. No action needed.
+#   - nvm: Node.js manager. Usage: `nvm install 20`, `nvm use 20`.
+#   - pyenv: Python manager. Usage: `pyenv install 3.12`, `pyenv global 3.12`.
+#   - powerlevel10k: The prompt theme. Run `p10k configure` to customize.
+#
 #######################################################################
 
 

@@ -87,6 +87,28 @@ return {
 		lspconfig.cssls.setup({ capabilities = capabilities })
 		lspconfig.jsonls.setup({ capabilities = capabilities })
 
+		-- Custom go-to-definition to jump if there is only one result
+		local function smart_definition()
+			local params = vim.lsp.util.make_position_params()
+			vim.lsp.buf_request(0, "textDocument/definition", params, function(err, result, ctx, config)
+				if err or not result or vim.tbl_isempty(result) then
+					vim.notify("No definition found", vim.log.levels.WARN)
+					return
+				end
+
+				local client = vim.lsp.get_client_by_id(ctx.client_id)
+				local position_encoding = (client and client.offset_encoding) or "utf-16"
+
+				if vim.islist(result) and #result > 1 then
+					vim.fn.setqflist({}, " ", { title = "LSP Definitions", items = vim.lsp.util.locations_to_items(result, position_encoding) })
+					vim.cmd("copen")
+				else
+					local location = vim.islist(result) and result[1] or result
+					vim.lsp.util.jump_to_location(location, position_encoding)
+				end
+			end)
+		end
+
 		-- Telescope + LSP keymaps
 		local telescope_builtin = require("telescope.builtin")
 		vim.keymap.set(
@@ -96,7 +118,7 @@ return {
 			{ noremap = true, silent = true, desc = "Telescope LSP References" }
 		)
 		vim.keymap.set("n", "<C-e>", vim.lsp.buf.hover, {})
-		vim.keymap.set("n", "gd", vim.lsp.buf.definition, {})
+		vim.keymap.set("n", "gd", smart_definition, { noremap = true, silent = true, desc = "Go to definition" })
 		vim.keymap.set("n", "gD", vim.lsp.buf.declaration, {})
 		vim.keymap.set("n", "gi", vim.lsp.buf.implementation, {})
 		vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, {})
