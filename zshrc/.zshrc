@@ -2,6 +2,9 @@
 #######################################################################
 # Requirements for this ~/.zshrc (manual installs via Homebrew)
 #
+# Framework (install first):
+#   sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+#
 # Core utilities:
 #   brew install fzf ripgrep bat eza zoxide
 #
@@ -16,6 +19,7 @@
 #   brew install nvm pyenv
 #
 # Notes:
+#   - Oh My Zsh: provides the plugin framework and themes
 #   - fzf: fuzzy finder (Ctrl-R, `zi` with zoxide, etc.)
 #   - ripgrep: fast recursive grep (`rg`)
 #   - bat: cat with syntax highlighting (`bat`)
@@ -56,14 +60,35 @@ bindkey -v
 # (works in iTerm2, kitty, Alacritty, most modern terminals)
 function zle-keymap-select {
   case $KEYMAP in
-    vicmd)      echo -ne '\e[1 q' ;;  # block cursor in NORMAL mode
-    viins|main) echo -ne '\e[0 q' ;;  # default cursor in INSERT mode
+    vicmd)      print -n '\e[4 q' ;;  # underscore cursor in NORMAL mode
+    viins|main) print -n '\e[0 q' ;;  # default cursor in INSERT mode
   esac
 }
 zle -N zle-keymap-select
 zle-line-init() { zle -K viins; zle-keymap-select }
 zle -N zle-line-init
-echo -ne '\e[5 q'  # default to beam on shell startup
+print -n '\e[5 q'  # default to beam on shell startup
+
+### --- Vim-like convenience bindings ---
+
+# jk in INSERT mode behaves like <Esc>
+bindkey -M viins 'jk' vi-cmd-mode
+
+# History navigation like in Vim's <C-p>/<C-n>
+bindkey '^P' up-history
+bindkey '^N' down-history
+
+# Line start/end like Vim 0/$
+bindkey '^A' beginning-of-line
+bindkey '^E' end-of-line
+
+# Delete previous word (like Ctrl-w in Vim insert mode)
+bindkey '^W' backward-kill-word
+
+# Search history with / in NORMAL mode
+bindkey -M vicmd '/' history-incremental-search-backward
+
+
 
 ##### Google Cloud SDK (quiet)
 [[ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]] && source "$HOME/google-cloud-sdk/path.zsh.inc" >/dev/null 2>&1
@@ -87,6 +112,7 @@ zstyle ':completion:*:descriptions' format '%F{yellow}%d%f'
 ##### zoxide — smarter cd
 eval "$(zoxide init zsh)"
 alias j='zi'
+alias cd='z'
 
 ##### Aliases
 alias ..="cd .."
