@@ -56,7 +56,8 @@ export PATH="$HOMEBREW_PREFIX/bin:$PATH"
 ##### Oh My Zsh + theme
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=(git zsh-autosuggestions zsh-syntax-highlighting web-search)
+
+plugins=(git web-search zsh-autosuggestions zsh-syntax-highlighting)
 source "$ZSH/oh-my-zsh.sh"   # <-- this already runs compinit
 
 
@@ -135,41 +136,26 @@ bindkey '^L' autosuggest-accept
 ##### Powerlevel10k prompt
 [[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
 
-##### nvm — true lazy load, no precmd hook
+# --- NVM (simple, no wrappers)
 export NVM_DIR="$HOME/.nvm"
-export NVM_DEFAULT="lts/*"   # or set a concrete version like "v22.11.0"
-__nvm_loaded=0
-_load_nvm() {
-  [[ $__nvm_loaded == 1 ]] && return
-  [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
-  [[ -s "$NVM_DIR/bash_completion" ]] && . "$NVM_DIR/bash_completion"
-  __nvm_loaded=1
-  # Switch once to default (fast if already active; no per-prompt penalty)
-  if [[ -n "$NVM_DEFAULT" ]] && command -v nvm >/dev/null 2>&1; then
-    # Only switch if not already on a matching version
-    if ! nvm current | grep -qE "$(nvm version "$NVM_DEFAULT" 2>/dev/null | sed 's/[.^$*+?()[\]{}|]/\\&/g')"; then
-      nvm use "$NVM_DEFAULT" >/dev/null 2>&1
-    fi
-  fi
-}
-for cmd in node npm npx pnpm corepack; do
-  eval "
-  $cmd() {
-    _load_nvm
-    command $cmd \"\$@\"
-  }"
-done
+[[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh" --no-use
+
+# Switch once to your default if it exists (fast, no network)
+if command -v nvm >/dev/null 2>&1; then
+  nvm use --silent default >/dev/null 2>&1 || true
+fi
 
 ##### pyenv
 #
 ##### pyenv — fast init (no rehash during source)
-export PYENV_ROOT="$HOME/.pyenv"
+# export PYENV_ROOT="$HOME/.pyenv"
 
 # Make pyenv and its shims available.
-if [[ -d "$PYENV_ROOT" ]]; then
-  export PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
-  # Avoid any implicit rehashing during startup
-  export PYENV_DISABLE_REHASH=1
-  # OPTIONAL: if you really want shell functions but not rehash/completions:
-  # command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - 2>/dev/null)" || true
-fi
+# if [[ -d "$PYENV_ROOT" ]]; then
+#   export PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
+#   # Avoid any implicit rehashing during startup
+#   export PYENV_DISABLE_REHASH=1
+#   # OPTIONAL: if you really want shell functions but not rehash/completions:
+#   # command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - 2>/dev/null)" || true
+# fi
+export GOOGLE_CLOUD_PROJECT="ubilabs-dev"
