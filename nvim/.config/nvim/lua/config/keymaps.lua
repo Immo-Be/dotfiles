@@ -87,7 +87,7 @@ vim.keymap.set("c", "<Leader>w", ":wa<CR>", { noremap = true, silent = true }) -
 -- Insert mode keybindings (non-recursive)
 vim.keymap.set("i", "jk", "<Esc>", { noremap = true }) -- Escape insert mode by pressing 'jk'
 
--- Add keybindings to navigat between nvim windows easier
+-- Add keybindings to navigate between nvim windows easier
 vim.keymap.set("n", "<C-k>", "<C-w>k", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-j>", "<C-w>j", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-h>", "<C-w>h", { noremap = true, silent = true })
@@ -98,10 +98,10 @@ vim.keymap.set("n", "y", '"+y', { noremap = true })
 vim.keymap.set("v", "y", '"+y', { noremap = true })
 vim.keymap.set("n", "yy", '"+yy', { noremap = true })
 vim.keymap.set("n", "Y", '"+Y', { noremap = true })
-
-vim.keymap.set("v", "d", '"+d', { noremap = true })
-vim.keymap.set("n", "d", '"+d', { noremap = true })
-vim.keymap.set("n", "dd", '"+dd', { noremap = true })
+--
+-- vim.keymap.set("v", "d", '"+d', { noremap = true })
+-- vim.keymap.set("n", "d", '"+d', { noremap = true })
+-- vim.keymap.set("n", "dd", '"+dd', { noremap = true })
 
 -- --- ADD THESE LINES FOR IN-LINE PASTE ---
 -- "Put" from system clipboard without creating a new line
