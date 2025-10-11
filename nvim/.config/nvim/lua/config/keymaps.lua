@@ -97,7 +97,8 @@ vim.keymap.set("n", "<C-l>", "<C-w>l", { noremap = true, silent = true })
 vim.keymap.set("n", "y", '"+y', { noremap = true })
 vim.keymap.set("v", "y", '"+y', { noremap = true })
 vim.keymap.set("n", "yy", '"+yy', { noremap = true })
-vim.keymap.set("n", "Y", '"+Y', { noremap = true })
+-- Make Y behave like y$, yanking from the cursor to the end of the line
+vim.keymap.set('n', 'Y', 'y$', { noremap = true })
 --
 -- vim.keymap.set("v", "d", '"+d', { noremap = true })
 -- vim.keymap.set("n", "d", '"+d', { noremap = true })

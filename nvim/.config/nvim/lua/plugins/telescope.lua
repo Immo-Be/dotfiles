@@ -67,9 +67,23 @@ return {
 
 			-- Keybindings
 			vim.keymap.set("n", "<leader>f", builtin.find_files, { desc = "Find Files" })
-			vim.keymap.set("n", "<leader>g", builtin.live_grep, { desc = "Live Grep" })
 			vim.keymap.set("n", "<leader>b", builtin.buffers, { desc = "Buffers" })
 			vim.keymap.set("n", "<leader>h", builtin.help_tags, { desc = "Help Tags" })
+
+      -- I deactivated find_files in favour of this custom multigrep function
+      -- here i can type double + file extensions to optionally search only specific files
+			-- custom function
+			-- vim.keymap.set("n", "<leader>g", builtin.live_grep, { desc = "Live Grep" })
+			-- Custom keymap to search only in node_modules
+			require("config.telescope.multigrep").setup()
+
+			vim.keymap.set("n", "<leader>n", function()
+				builtin.live_grep({
+					search_dirs = { "node_modules" },
+					prompt_title = "Live Grep in node_modules",
+				})
+			end, { desc = "Live Grep in node_modules" })
+
 
 			-- ✅ Use Telescope for LSP Code Actions
 		end,

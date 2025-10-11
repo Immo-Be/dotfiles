@@ -29,17 +29,15 @@ return {
 			end
 		end
 
-		local lspconfig = require("lspconfig")
-
 		-- Astro
-		lspconfig.astro.setup({
+		vim.lsp.config("astro", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 			filetypes = { "astro" },
 		})
 
 		-- ✅ TypeScript/JavaScript via vtsls (great TSX/JSX support)
-		lspconfig.vtsls.setup({
+		vim.lsp.config("vtsls", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 			-- Be explicit; helpful if filetype detection was customized.
@@ -83,9 +81,9 @@ return {
 		-- })
 
 		-- HTML, CSS, JSON
-		lspconfig.html.setup({ capabilities = capabilities })
-		lspconfig.cssls.setup({ capabilities = capabilities })
-		lspconfig.jsonls.setup({ capabilities = capabilities })
+		vim.lsp.config("html", { capabilities = capabilities })
+		vim.lsp.config("cssls", { capabilities = capabilities })
+		vim.lsp.config("jsonls", { capabilities = capabilities })
 
 		-- Custom go-to-definition to jump if there is only one result
 		local function smart_definition()

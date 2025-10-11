@@ -31,13 +31,44 @@ return {
 				-- astro (Prettier supports it via plugin if present)
 				"astro",
 			},
-			env = { PRETTIERD_LOCAL_PRETTIER_ONLY = "1" },
+			-- Remove the restrictive env variable to allow global prettier as fallback
+			-- env = { PRETTIERD_LOCAL_PRETTIER_ONLY = "1" },
 		})
 
 		null_ls.setup({
 			sources = {
+				-- Lua formatting
 				null_ls.builtins.formatting.stylua,
+				
+				-- JavaScript/TypeScript formatting
 				prettierd,
+				
+				-- ESLint for JavaScript/TypeScript linting and some fixing
+				-- Use the correct none-ls-extras imports
+				require("none-ls.diagnostics.eslint_d").with({
+					condition = function(utils)
+						return utils.root_has_file({
+							".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.yaml", 
+							".eslintrc.yml", ".eslintrc.json", "eslint.config.js"
+						})
+					end,
+				}),
+				require("none-ls.code_actions.eslint_d").with({
+					condition = function(utils)
+						return utils.root_has_file({
+							".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.yaml", 
+							".eslintrc.yml", ".eslintrc.json", "eslint.config.js"
+						})
+					end,
+				}),
+				
+				-- Additional Node.js related formatters
+				null_ls.builtins.formatting.biome.with({
+					condition = function(utils)
+						-- Only use biome if biome.json exists in the project
+						return utils.root_has_file("biome.json")
+					end,
+				}),
 			},
 			-- Keep your root detection; Prettier will pick up local config/plugins
 			root_dir = require("null-ls.utils").root_pattern(
