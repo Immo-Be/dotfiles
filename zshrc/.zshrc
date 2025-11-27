@@ -60,11 +60,6 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 plugins=(git web-search zsh-autosuggestions zsh-syntax-highlighting)
 source "$ZSH/oh-my-zsh.sh"   # <-- this already runs compinit
 
-
-# Use vi keybindings in ZLE (command line editor)
-bindkey -v
-
-# Make ESC show you're in normal mode by changing the cursor shape (optional)
 # (works in iTerm2, kitty, Alacritty, most modern terminals)
 function zle-keymap-select {
   case $KEYMAP in
@@ -96,7 +91,17 @@ bindkey '^W' backward-kill-word
 # Search history with / in NORMAL mode
 bindkey -M vicmd '/' history-incremental-search-backward
 
+#Vi Mode
+# see https://www.youtube.com/watch?v=OKuUoZaPiwE
 
+bindkey -v # Enable vi keybindings in zsh
+export KEYTIMEOUT=1 # Reduce delay for key sequences
+
+# Press 'v' in normal mode to open the current command line in $EDITOR
+export EDITOR='nvim'
+autoload edit-command-line
+zle -N edit-command-line
+bindkey -M vicmd 'v' edit-command-line
 
 ##### Google Cloud SDK (quiet)
 [[ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]] && source "$HOME/google-cloud-sdk/path.zsh.inc" >/dev/null 2>&1
@@ -144,6 +149,31 @@ export NVM_DIR="$HOME/.nvm"
 if command -v nvm >/dev/null 2>&1; then
   nvm use --silent default >/dev/null 2>&1 || true
 fi
+
+mvproj() {
+  local src dest project_root
+
+  # 1️⃣ Pick source file (from ~/Downloads)
+  src="${1:-$(ls -t ~/Downloads | fzf --prompt='Select file> ')}"
+  [[ -z "$src" ]] && echo "❌ No file selected" && return 1
+
+  # 2️⃣ Pick project root (from ~/projects/)
+  project_root="${2:-$(ls -d ~/Documents/projects/*/ | fzf --prompt='Select project root> ')}"
+  [[ -z "$project_root" ]] && echo "❌ No project selected" && return 1
+
+  # 3️⃣ Pick destination directory (inside project, excluding junk dirs)
+  dest="$(find "$project_root" -type d \
+    -not -path "*/node_modules/*" \
+    -not -path "*/.git/*" \
+    -not -path "*/dist/*" \
+    -not -path "*/build/*" 2>/dev/null | \
+    fzf --prompt='Select destination dir> ')"
+  [[ -z "$dest" ]] && echo "❌ No destination directory selected" && return 1
+
+  # 4️⃣ Move the file
+  mv -i "$HOME/Downloads/$src" "$dest/" && \
+    echo "✅ Moved $src → $dest/"
+}
 
 ##### pyenv
 #

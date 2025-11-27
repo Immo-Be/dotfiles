@@ -48,7 +48,6 @@ vim.keymap.set("n", "<leader><leader>ba", ":bufdo bwipeout<CR>", { desc = "Close
 -- Potentially useful for jsx files
 vim.keymap.set("n", "<leader>r", "G[r", { remap = true, desc = "Jump to last return() in buffer" })
 
-
 vim.keymap.set("n", "<leader>se", function()
 	vim.diagnostic.open_float(nil, {
 		focusable = false, -- Don't steal focus
@@ -98,7 +97,7 @@ vim.keymap.set("n", "y", '"+y', { noremap = true })
 vim.keymap.set("v", "y", '"+y', { noremap = true })
 vim.keymap.set("n", "yy", '"+yy', { noremap = true })
 -- Make Y behave like y$, yanking from the cursor to the end of the line
-vim.keymap.set('n', 'Y', 'y$', { noremap = true })
+vim.keymap.set("n", "Y", "y$", { noremap = true })
 --
 -- vim.keymap.set("v", "d", '"+d', { noremap = true })
 -- vim.keymap.set("n", "d", '"+d', { noremap = true })
@@ -120,15 +119,45 @@ vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
 vim.keymap.set("n", "<leader><F5>", vim.cmd.UndotreeToggle)
 
 -- Git related keymaps
+-- Keybinding to view Git file history for the current file
 vim.keymap.set("n", "<leader>hg", ":DiffviewFileHistory %<CR>", {
-  desc = "Git file history (current file)",
-  silent = true,
+	desc = "Git file history (current file)",
+	silent = true,
 })
 
+-- Keybinding to view Git history for the entire project
 vim.keymap.set("n", "<leader>hG", ":DiffviewFileHistory<CR>", {
-  desc = "Git history (project)",
-  silent = true,
+	desc = "Git history (project)",
+	silent = true,
 })
 -- Map gA to work like g<C-a>
 -- The problem is when using neovim in tmux as Ctrl a is the chosen leader prefix there...
 -- vim.api.nvim_set_keymap('x', 'gA', 'g<C-a>', {noremap = true})
+
+-- Console.log keybinding (Turbo Console Log style)
+vim.keymap.set("n", "<leader>cg", function()
+	local line_num = vim.fn.line(".")
+	local file_name = vim.fn.expand("%:t")
+	local word = vim.fn.expand("<cword>")
+
+	local log_line = string.format('console.log("🚀 ~ %s:%s → %s:", %s);', file_name, line_num, word, word)
+
+	vim.api.nvim_put({ log_line }, "l", true, true)
+end, { desc = "Insert console.log for word under cursor" })
+
+vim.keymap.set("v", "<leader>cg", function()
+	local line_num = vim.fn.line(".")
+	local file_name = vim.fn.expand("%:t")
+
+	-- Get the visual selection
+	vim.cmd('noau normal! "vy"')
+	local selected_text = vim.fn.getreg("v"):gsub("\n", " ")
+
+	-- Exit visual mode
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+
+	local log_line =
+		string.format('console.log("🚀 ~ %s:%s → %s:", %s);', file_name, line_num, selected_text, selected_text)
+
+	vim.api.nvim_put({ log_line }, "l", true, true)
+end, { desc = "Insert console.log for visual selection" })
