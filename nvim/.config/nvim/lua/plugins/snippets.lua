@@ -1,11 +1,11 @@
 return {
 
-	{
-		"zbirenbaum/copilot-cmp",
-		config = function()
-			require("copilot_cmp").setup()
-		end,
-	},
+	-- {
+	-- 	"zbirenbaum/copilot-cmp",
+	-- 	config = function()
+	-- 		require("copilot_cmp").setup()
+	-- 	end,
+	-- },
 
 	{
 		"hrsh7th/cmp-nvim-lsp",
@@ -27,6 +27,7 @@ return {
 		config = function()
 			local cmp = require("cmp")
 			require("luasnip.loaders.from_vscode").lazy_load()
+			require("luasnip.loaders.from_vscode").lazy_load({ paths = { vim.fn.stdpath("config") .. "/snippets" } })
 
 			-- this if from https://github.com/zbirenbaum/copilot-cmp
 			-- Without it, using Tab to go through suggestions does not work
@@ -64,8 +65,6 @@ return {
 					-- end),
 				}),
 				sources = cmp.config.sources({
-					-- Copilot Source
-					{ name = "copilot", group_index = 2 },
 					{ name = "nvim_lsp" },
 					{ name = "luasnip" }, -- For luasnip users.
 				}, {

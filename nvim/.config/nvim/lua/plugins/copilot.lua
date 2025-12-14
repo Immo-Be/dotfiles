@@ -15,6 +15,9 @@ return {
 			-- this file can contain specific instructions for your project
 			provider = "copilot",
 			providers = {
+				copilot = {
+					model = "gpt-4-0125-preview",
+				},
 				copilot_test = {
 					__inherited_from = "copilot",
 					request = {

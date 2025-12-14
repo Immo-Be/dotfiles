@@ -1,0 +1,102 @@
+{
+  "React Functional Component": {
+    "prefix": "rsc",
+    "body": [
+      "import styles from \"./${TM_FILENAME_BASE}.module.css\"",
+      "",
+      "export default function ${1:${TM_FILENAME_BASE}}() {",
+      "  return (",
+      "    <div>",
+      "      $0",
+      "    </div>",
+      "  )",
+      "}"
+    ],
+    "description": "React Functional Component"
+  },
+  "useState": {
+    "prefix": "uss",
+    "body": ["const [${1:state}, set${1/(.*)/${1:/capitalize}/}] = useState(${2:initialValue})"],
+    "description": "React useState hook"
+  },
+  "useEffect": {
+    "prefix": "uef",
+    "body": ["useEffect(() => {", "  $0", "}, [${1:dependencies}])"],
+    "description": "React useEffect hook"
+  },
+  "useContext": {
+    "prefix": "ucx",
+    "body": ["const ${1:value} = useContext(${2:Context})"],
+    "description": "React useContext hook"
+  },
+  "useReducer": {
+    "prefix": "urd",
+    "body": ["const [${1:state}, ${2:dispatch}] = useReducer(${3:reducer}, ${4:initialState})"],
+    "description": "React useReducer hook"
+  },
+  "useCallback": {
+    "prefix": "ucb",
+    "body": ["const ${1:callback} = useCallback(() => {", "  $0", "}, [${2:dependencies}])"],
+    "description": "React useCallback hook"
+  },
+  "useMemo": {
+    "prefix": "umo",
+    "body": ["const ${1:memoizedValue} = useMemo(() => ${2:computeValue}, [${3:dependencies}])"],
+    "description": "React useMemo hook"
+  },
+  "useRef": {
+    "prefix": "urf",
+    "body": ["const ${1:ref} = useRef(${2:initialValue})"],
+    "description": "React useRef hook"
+  },
+  "useImperativeHandle": {
+    "prefix": "uih",
+    "body": ["useImperativeHandle(${1:ref}, () => ({", "  $0", "}), [${2:dependencies}])"],
+    "description": "React useImperativeHandle hook"
+  },
+  "useLayoutEffect": {
+    "prefix": "ule",
+    "body": ["useLayoutEffect(() => {", "  $0", "}, [${1:dependencies}])"],
+    "description": "React useLayoutEffect hook"
+  },
+  "useDebugValue": {
+    "prefix": "udv",
+    "body": ["useDebugValue(${1:value})"],
+    "description": "React useDebugValue hook"
+  },
+  "useId": {
+    "prefix": "uid",
+    "body": ["const ${1:id} = useId()"],
+    "description": "React useId hook"
+  },
+  "useTransition": {
+    "prefix": "utr",
+    "body": ["const [isPending, startTransition] = useTransition()"],
+    "description": "React useTransition hook"
+  },
+  "useDeferredValue": {
+    "prefix": "udf",
+    "body": ["const ${1:deferredValue} = useDeferredValue(${2:value})"],
+    "description": "React useDeferredValue hook"
+  },
+  "useSyncExternalStore": {
+    "prefix": "uses",
+    "body": ["const ${1:state} = useSyncExternalStore(${2:subscribe}, ${3:getSnapshot})"],
+    "description": "React useSyncExternalStore hook"
+  },
+  "useInsertionEffect": {
+    "prefix": "uie",
+    "body": ["useInsertionEffect(() => {", "  $0", "}, [${1:dependencies}])"],
+    "description": "React useInsertionEffect hook"
+  },
+  "use": {
+    "prefix": "use",
+    "body": ["const ${1:value} = use(${2:resource})"],
+    "description": "React use hook"
+  },
+  "useEffectEvent": {
+    "prefix": "uee",
+    "body": ["const ${1:onEvent} = useEffectEvent((${2:params}) => {", "  $0", "})"],
+    "description": "React useEffectEvent hook"
+  }
+}
