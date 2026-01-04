@@ -1,5 +1,4 @@
 return {
-
 	-- {
 	-- 	"zbirenbaum/copilot-cmp",
 	-- 	config = function()
@@ -24,6 +23,14 @@ return {
 	},
 	{
 		"hrsh7th/nvim-cmp",
+		event = "InsertEnter", -- Load on entering insert mode
+		dependencies = {
+			"hrsh7th/cmp-nvim-lsp",
+			"L3MON4D3/LuaSnip",
+			"saadparwaiz1/cmp_luasnip",
+			"hrsh7th/cmp-path",   -- Make sure path source is installed
+			"hrsh7th/cmp-buffer", -- Make sure buffer source is installed
+		},
 		config = function()
 			local cmp = require("cmp")
 			require("luasnip.loaders.from_vscode").lazy_load()
@@ -53,20 +60,32 @@ return {
 				mapping = cmp.mapping.preset.insert({
 					["<C-b>"] = cmp.mapping.scroll_docs(-4),
 					["<C-f>"] = cmp.mapping.scroll_docs(4),
-					["<C-Space>"] = cmp.mapping.complete(),
 					["<C-e>"] = cmp.mapping.abort(),
 					["<CR>"] = cmp.mapping.confirm({ select = true }),
-					-- ["<Tab>"] = vim.schedule_wrap(function(fallback)
-					-- 	if cmp.visible() and has_words_before() then
-					-- 		cmp.select_next_item({ behavior = cmp.SelectBehavior.Select })
-					-- 	else
-					-- 		fallback()
-					-- 	end
-					-- end),
+					["<leader>t"] = cmp.mapping.complete(), -- Explicitly trigger completion with <leader>t
+					["<Tab>"] = cmp.mapping(function(fallback)
+						if cmp.visible() then
+							cmp.select_next_item()
+						elseif require("luasnip").expand_or_jumpable() then
+							require("luasnip").expand_or_jump()
+						else
+							fallback() -- Fallback to actual tab character if nothing else
+						end
+					end, { "i", "s" }),
+					["<S-Tab>"] = cmp.mapping(function(fallback)
+						if cmp.visible() then
+							cmp.select_prev_item()
+						elseif require("luasnip").jumpable(-1) then
+							require("luasnip").jump(-1)
+						else
+							fallback()
+						end
+					end, { "i", "s" }),
 				}),
 				sources = cmp.config.sources({
 					{ name = "nvim_lsp" },
 					{ name = "luasnip" }, -- For luasnip users.
+					{ name = "path" },
 				}, {
 					{ name = "buffer" },
 				}),

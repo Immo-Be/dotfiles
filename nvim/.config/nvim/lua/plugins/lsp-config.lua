@@ -15,6 +15,7 @@ return {
 				"cssls",
 				"jsonls",
 				"astro",
+				"bashls", -- Add bashls for shell script support
 			},
 		})
 
@@ -34,6 +35,13 @@ return {
 			capabilities = capabilities,
 			on_attach = on_attach,
 			filetypes = { "astro" },
+		})
+
+		-- Bash LSP
+		vim.lsp.config("bashls", {
+			capabilities = capabilities,
+			on_attach = on_attach,
+			filetypes = { "sh", "bash", "zsh" },
 		})
 
 		-- ✅ TypeScript/JavaScript via vtsls (great TSX/JSX support)
@@ -69,6 +77,7 @@ return {
 				},
 			},
 		})
+
 
 		-- If you really want to stick with the old server, uncomment this block instead:
 		-- lspconfig.ts_ls.setup({
