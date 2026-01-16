@@ -13,6 +13,7 @@ return {
 					window = {
 						mappings = {
 							["yy"] = "copy_path_to_clipboard", -- default
+							["o"] = "open_in_finder",
 						},
 					},
 					commands = {
@@ -21,6 +22,12 @@ return {
 							local path = node:get_id()
 							vim.fn.setreg("+", path) -- system clipboard
 							print("Copied to clipboard: " .. path)
+						end,
+						open_in_finder = function(state)
+							local node = state.tree:get_node()
+							local path = node:get_id()
+							vim.fn.system({"open", path})
+							print("Opened in Finder: " .. path)
 						end,
 					},
 					follow_current_file = { enabled = true }, -- ✅ Updated to the new format

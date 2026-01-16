@@ -132,6 +132,12 @@ alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
 alias ll="ls -lah"
+
+
+
+yad() {
+  yazi "${1:-$PWD}" "$HOME/Downloads"
+}
 # alias ls="eza -F --group --icons"
 # alias ll="eza -lah --group --icons"
 
@@ -189,3 +195,6 @@ mvproj() {
 #   # command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - 2>/dev/null)" || true
 # fi
 export GOOGLE_CLOUD_PROJECT="ubilabs-dev"
+
+# Added by Antigravity
+export PATH="/Users/immo/.antigravity/antigravity/bin:$PATH"
