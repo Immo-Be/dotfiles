@@ -33,8 +33,48 @@ return {
 		},
 		config = function()
 			local cmp = require("cmp")
+			local luasnip = require("luasnip")
 			require("luasnip.loaders.from_vscode").lazy_load()
 			require("luasnip.loaders.from_vscode").lazy_load({ paths = { vim.fn.stdpath("config") .. "/snippets" } })
+			
+			-- Load custom Lua snippets
+			require("config.luasnip")
+
+			-- Create command to list available snippets
+			vim.api.nvim_create_user_command("LuaSnipListAvailable", function()
+				local ft = vim.bo.filetype
+				local snippets = luasnip.get_snippets(ft)
+				local lines = { "Available snippets for filetype: " .. ft, "" }
+
+				if snippets and #snippets > 0 then
+					for _, snippet in ipairs(snippets) do
+						table.insert(lines, string.format("  %s - %s", snippet.trigger, snippet.name or ""))
+					end
+				else
+					table.insert(lines, "  No snippets available for this filetype")
+				end
+
+				-- Display in a floating window
+				local buf = vim.api.nvim_create_buf(false, true)
+				vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+				vim.api.nvim_buf_set_option(buf, "modifiable", false)
+
+				local width = 60
+				local height = #lines
+				local opts = {
+					relative = "cursor",
+					width = width,
+					height = height,
+					row = 1,
+					col = 0,
+					style = "minimal",
+					border = "rounded",
+				}
+
+				local win = vim.api.nvim_open_win(buf, true, opts)
+				vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", { noremap = true, silent = true })
+				vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", { noremap = true, silent = true })
+			end, { desc = "List available LuaSnip snippets for current filetype" })
 
 			-- this if from https://github.com/zbirenbaum/copilot-cmp
 			-- Without it, using Tab to go through suggestions does not work
