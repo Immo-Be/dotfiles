@@ -41,13 +41,13 @@
 #######################################################################
 
 
-##### p10k instant prompt — keep at very top
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
+##### p10k instant prompt — keep at very top (disabled for Oh My Posh)
+# if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+#   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+# fi
 
 # Optional: silence warning without disabling
-typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
+# typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
 
 ##### Homebrew prefix (Apple Silicon)
 HOMEBREW_PREFIX="/opt/homebrew"
@@ -55,7 +55,8 @@ export PATH="$HOMEBREW_PREFIX/bin:$PATH"
 
 ##### Oh My Zsh + theme
 export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
+# ZSH_THEME="powerlevel10k/powerlevel10k" # Disabled for Oh My Posh
+ZSH_THEME="" # Set to empty when using Oh My Posh
 
 plugins=(git web-search zsh-autosuggestions zsh-syntax-highlighting)
 source "$ZSH/oh-my-zsh.sh"   # <-- this already runs compinit
@@ -144,8 +145,13 @@ yad() {
 ##### zsh-autosuggestions — accept suggestion with Ctrl+L
 bindkey '^L' autosuggest-accept
 
-##### Powerlevel10k prompt
-[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+##### Oh My Posh prompt (replaces Powerlevel10k)
+# Pick a theme: https://ohmyposh.dev/docs/themes
+# Example themes: agnoster, atomic, blue-owl, catppuccin, paradox, powerlevel10k_rainbow
+eval "$(oh-my-posh init zsh --config ~/.config/ohmyposh-custom.json)"
+
+##### Powerlevel10k prompt (disabled for Oh My Posh)
+# [[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
 
 # --- NVM (simple, no wrappers)
 export NVM_DIR="$HOME/.nvm"
@@ -198,3 +204,10 @@ export GOOGLE_CLOUD_PROJECT="ubilabs-dev"
 
 # Added by Antigravity
 export PATH="/Users/immo/.antigravity/antigravity/bin:$PATH"
+
+
+#chpwd hook
+# execute ls after cd 
+chpwd() {
+ ls
+}
