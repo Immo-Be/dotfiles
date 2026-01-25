@@ -4,13 +4,14 @@ return {
 	event = { "BufReadPost", "BufNewFile" },
 	opts = {
 		indent = {
-			char = "│",
-			tab_char = "│",
+			char = "▏", -- Very subtle thin line
+			tab_char = "▏",
 		},
 		scope = {
-			enabled = true,
+			enabled = true, -- Highlight current scope
 			show_start = true,
 			show_end = false,
+			highlight = { "IblScope" }, -- Use dimmer highlight
 		},
 		exclude = {
 			filetypes = {
@@ -28,4 +29,11 @@ return {
 			},
 		},
 	},
+	config = function(_, opts)
+		require("ibl").setup(opts)
+		
+		-- Make indent lines very subtle by setting a dimmer color
+		vim.api.nvim_set_hl(0, "IblIndent", { fg = "#2a2a37" }) -- Very dim gray
+		vim.api.nvim_set_hl(0, "IblScope", { fg = "#3e4451" }) -- Slightly more visible for scope
+	end,
 }
