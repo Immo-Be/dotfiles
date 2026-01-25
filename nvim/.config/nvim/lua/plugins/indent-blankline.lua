@@ -3,6 +3,7 @@ return {
 	main = "ibl",
 	event = { "BufReadPost", "BufNewFile" },
 	opts = {
+		enabled = false, -- Disabled by default
 		indent = {
 			char = "▏", -- Very subtle thin line
 			tab_char = "▏",
@@ -35,5 +36,10 @@ return {
 		-- Make indent lines very subtle by setting a dimmer color
 		vim.api.nvim_set_hl(0, "IblIndent", { fg = "#2a2a37" }) -- Very dim gray
 		vim.api.nvim_set_hl(0, "IblScope", { fg = "#3e4451" }) -- Slightly more visible for scope
+		
+		-- Add custom command to toggle indent guides
+		vim.api.nvim_create_user_command("IndentGuidesToggle", function()
+			vim.cmd("IBLToggle")
+		end, { desc = "Toggle indent guides on/off" })
 	end,
 }
