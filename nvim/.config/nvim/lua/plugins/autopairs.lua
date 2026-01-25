@@ -13,7 +13,7 @@ return {
 			},
 			disable_filetype = { "TelescopePrompt", "vim" },
 			fast_wrap = {
-				map = "<M-e>", -- Alt+e to fast wrap
+				map = "<leader>aw", -- <leader>aw to fast wrap (aw = auto wrap)
 				chars = { "{", "[", "(", '"', "'" },
 				pattern = [=[[%'%"%)%>%]%)%}%,]]=],
 				end_key = "$",
