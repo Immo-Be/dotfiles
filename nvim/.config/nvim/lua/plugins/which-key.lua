@@ -2,8 +2,8 @@ return {
 	"folke/which-key.nvim",
 	event = "VeryLazy",
 	opts = {
-		-- your configuration comes here
-		-- or leave it empty to use the default settings
+		-- Disable by default - use :WhichKey to show bindings manually
+		delay = 999999, -- Effectively disable automatic popup
 		plugins = {
 			marks = true, -- shows a list of your marks on ' and `
 			registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
@@ -52,5 +52,18 @@ return {
 			{ "g+", desc = "Increment numbers sequentially" },
 			{ "g-", desc = "Decrement numbers sequentially" },
 		})
+
+		-- Command to toggle which-key auto-popup
+		local auto_enabled = false
+		vim.api.nvim_create_user_command("WhichKeyToggle", function()
+			auto_enabled = not auto_enabled
+			if auto_enabled then
+				wk.setup({ delay = 500 }) -- Show after 500ms delay
+				vim.notify("Which-key auto-popup enabled", vim.log.levels.INFO)
+			else
+				wk.setup({ delay = 999999 }) -- Disable auto-popup
+				vim.notify("Which-key auto-popup disabled", vim.log.levels.INFO)
+			end
+		end, { desc = "Toggle which-key automatic popup" })
 	end,
 }
