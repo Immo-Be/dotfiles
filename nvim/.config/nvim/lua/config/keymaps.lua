@@ -14,7 +14,6 @@ vim.keymap.set("n", "<leader>ws", ":Telescope lsp_workspace_symbols<CR>", { nore
 vim.keymap.set("n", "<leader>%", ":vsplit<CR>", { noremap = true, silent = true }) -- Vertical split
 vim.keymap.set("n", '<leader>"', ":split<CR>", { noremap = true, silent = true }) -- Horizontal split
 
-vim.api.nvim_set_keymap("n", "<M-Tab>", ":b#<CR>", { noremap = true, silent = true })
 vim.keymap.set("n", "<M-Tab>", ":b#<CR>", { noremap = true, silent = true })
 
 -- Center screen when going half page with C-D and C-U
@@ -23,11 +22,9 @@ vim.keymap.set("n", "<C-u>", "<C-u>zz", { noremap = true, silent = true })
 
 -- Recommend for avante.nvim: views can only be fully collapsed with the global statusline
 vim.opt.laststatus = 3
-vim.opt.ignorecase = true
 
 vim.keymap.set("n", "]e", vim.diagnostic.goto_next, { desc = "Next error" })
 vim.keymap.set("n", "[e", vim.diagnostic.goto_prev, { desc = "Previous error" })
-vim.keymap.set("n", "<leader>e", vim.diagnostic.goto_next, { desc = "Next error" })
 
 vim.keymap.set("n", "]t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
 vim.keymap.set("n", "[t", ":tabprevious<CR>", { desc = "Previous tab", noremap = true, silent = true })
@@ -58,13 +55,14 @@ vim.keymap.set("n", "<leader>se", function()
 	})
 end, { desc = "Show diagnostics for current line" })
 
-vim.keymap.set("n", "<leader>e", function()
+-- Changed from <leader>e to <leader>fe to avoid conflict with diagnostic navigation
+vim.keymap.set("n", "<leader>fe", function()
 	require("mini.files").open(vim.fn.expand("%:p:h"))
 end, { desc = "Open mini.files at current file's directory" })
 
-vim.keymap.set("n", "<leader>E", function()
+vim.keymap.set("n", "<leader>fE", function()
 	require("mini.files").open()
-end, { desc = "Open Mini Files" })
+end, { desc = "Open Mini Files at cwd" })
 
 -- This remaps the Ctrl + S to Ctrl + A
 -- We do this because we use Ctrl + S as the leader key for tmux

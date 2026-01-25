@@ -1,3 +1,9 @@
+-- Indentation
+vim.opt.expandtab = true     -- Use spaces instead of tabs
+vim.opt.tabstop = 2          -- Number of spaces tabs count for
+vim.opt.softtabstop = 2      -- Number of spaces for <Tab> in insert mode
+vim.opt.shiftwidth = 2       -- Number of spaces for each step of (auto)indent
+
 -- Keep signcolumn on by default
 vim.opt.signcolumn = "yes"
 
