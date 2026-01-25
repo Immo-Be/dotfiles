@@ -209,5 +209,5 @@ export PATH="/Users/immo/.antigravity/antigravity/bin:$PATH"
 #chpwd hook
 # execute ls after cd 
 chpwd() {
- ls
+ ls -a
 }
