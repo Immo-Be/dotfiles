@@ -1,6 +1,7 @@
 local M = {
 	{
 		"nvim-treesitter/nvim-treesitter",
+		desc = "Treesitter configurations and abstraction layer",
 		dependencies = {
 			"windwp/nvim-ts-autotag", -- Auto-close tags for HTML, JSX, TSX, Svelte
 			"HiPhish/rainbow-delimiters.nvim", -- Colored matching brackets
@@ -125,4 +126,4 @@ local M = {
 	},
 }
 
-return { M }
+return M

@@ -1,5 +1,6 @@
 return {
 	"lukas-reineke/indent-blankline.nvim",
+	desc = "Visual indent guides with scope highlighting",
 	main = "ibl",
 	event = { "BufReadPost", "BufNewFile" },
 	opts = {

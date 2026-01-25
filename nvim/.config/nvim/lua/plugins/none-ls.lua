@@ -1,5 +1,6 @@
 return {
 	"nvimtools/none-ls.nvim",
+	desc = "Formatting and linting via LSP",
 	dependencies = { "nvimtools/none-ls-extras.nvim" },
 	config = function()
 		local null_ls = require("null-ls")
@@ -94,14 +95,14 @@ return {
 			})
 		end, { desc = "Format with null-ls" })
 
-		-- If you re-enable format-on-save later, include TSX/JSX/etc. in the pattern list.
+		-- Format-on-save is disabled by user preference
+		-- To re-enable, uncomment and adjust the autocmd below:
 		-- local fmt_group = vim.api.nvim_create_augroup("FormatOnSaveNoneLS", { clear = true })
 		-- vim.api.nvim_create_autocmd("BufWritePre", {
 		--   group = fmt_group,
-		--   pattern = {
-		--     "*.html","*.gohtml","*.gotmpl","*.tmpl","*.md","*.mdx","*.css","*.scss",
-		--     "*.json","*.yml","*.yaml","*.js","*.jsx","*.ts","*.tsx","*.astro","*.lua",
-		--   },
+		--   pattern = { "*.html", "*.gohtml", "*.gotmpl", "*.tmpl", "*.md", "*.mdx",
+		--               "*.css", "*.scss", "*.json", "*.yml", "*.yaml", "*.js", "*.jsx",
+		--               "*.ts", "*.tsx", "*.astro", "*.lua" },
 		--   callback = function()
 		--     vim.lsp.buf.format({
 		--       filter = function(client) return client.name == "null-ls" end,

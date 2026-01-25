@@ -1,6 +1,7 @@
 return {
 	{
 		"yetone/avante.nvim",
+		desc = "AI-powered code assistant using Copilot",
 		build = function()
 			if vim.fn.has("win32") == 1 then
 				return "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false"

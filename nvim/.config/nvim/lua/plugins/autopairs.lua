@@ -1,5 +1,6 @@
 return {
 	"windwp/nvim-autopairs",
+	desc = "Auto-close brackets, quotes, and tags",
 	event = "InsertEnter",
 	dependencies = { "hrsh7th/nvim-cmp" },
 	config = function()

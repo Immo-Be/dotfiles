@@ -1,12 +1,11 @@
 return {
 	{
 		"nvim-telescope/telescope.nvim",
-		-- "nvim-telescope/telescope-smart-history.nvim",
+		desc = "Fuzzy finder over lists",
 		branch = "0.1.x",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
-			"nvim-telescope/telescope-ui-select.nvim", -- ✅ Add this line
-			-- "nvim-telescope/telescope-smart-history.nvim",
+			"nvim-telescope/telescope-ui-select.nvim",
 		},
 		config = function()
 			local telescope = require("telescope")
@@ -54,16 +53,11 @@ return {
 					["ui-select"] = {
 						require("telescope.themes").get_dropdown({}),
 					},
-					-- ["smart_history"] = {
-					-- 	require("nvim-telescope/telescope-smart-history.nvim"),
-					-- },
 				},
 			})
 
 			-- Load the ui-select extension
 			telescope.load_extension("ui-select")
-			-- -- Load the smart_history extension
-			-- telescope.load_extension("smart_history")
 
 			-- Keybindings
 			vim.keymap.set("n", "<leader>f", builtin.find_files, { desc = "Find Files" })

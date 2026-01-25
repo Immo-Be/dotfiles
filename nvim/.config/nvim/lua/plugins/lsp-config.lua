@@ -1,5 +1,6 @@
 return {
 	"neovim/nvim-lspconfig",
+	desc = "Quickstart configs for Neovim LSP",
 	dependencies = {
 		"williamboman/mason.nvim",
 		"williamboman/mason-lspconfig.nvim",
