@@ -55,12 +55,12 @@ vim.keymap.set("n", "<leader>se", function()
 	})
 end, { desc = "Show diagnostics for current line" })
 
--- Changed from <leader>e to <leader>fe to avoid conflict with diagnostic navigation
-vim.keymap.set("n", "<leader>fe", function()
+-- Mini.files explorer (e for explorer)
+vim.keymap.set("n", "<leader>e", function()
 	require("mini.files").open(vim.fn.expand("%:p:h"))
 end, { desc = "Open mini.files at current file's directory" })
 
-vim.keymap.set("n", "<leader>fE", function()
+vim.keymap.set("n", "<leader>E", function()
 	require("mini.files").open()
 end, { desc = "Open Mini Files at cwd" })
 
