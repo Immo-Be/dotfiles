@@ -30,12 +30,18 @@ return {
 		},
 	},
 	config = function(_, opts)
+		-- Set highlights before setup to ensure they're applied correctly
+		vim.api.nvim_set_hl(0, "IblIndent", { fg = "#2a2a37" }) -- Very dim gray
+		vim.api.nvim_set_hl(0, "IblScope", { fg = "#3e4451" }) -- Slightly more visible for scope
+		
 		local ibl = require("ibl")
 		ibl.setup(opts)
 		
-		-- Make indent lines very subtle by setting a dimmer color
-		vim.api.nvim_set_hl(0, "IblIndent", { fg = "#2a2a37" }) -- Very dim gray
-		vim.api.nvim_set_hl(0, "IblScope", { fg = "#3e4451" }) -- Slightly more visible for scope
+		-- Refresh after a short delay to ensure correct rendering
+		vim.defer_fn(function()
+			vim.cmd("IBLDisable")
+			vim.cmd("IBLEnable")
+		end, 50)
 		
 		-- Add custom command to toggle indent guides
 		vim.api.nvim_create_user_command("IndentGuidesToggle", function()
