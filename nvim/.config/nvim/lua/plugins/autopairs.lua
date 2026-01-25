@@ -12,16 +12,6 @@ return {
 				java = false, -- Disable for java
 			},
 			disable_filetype = { "TelescopePrompt", "vim" },
-			fast_wrap = {
-				map = "<leader>aw", -- <leader>aw to fast wrap (aw = auto wrap)
-				chars = { "{", "[", "(", '"', "'" },
-				pattern = [=[[%'%"%)%>%]%)%}%,]]=],
-				end_key = "$",
-				keys = "qwertyuiopzxcvbnmasdfghjkl",
-				check_comma = true,
-				highlight = "Search",
-				highlight_grey = "Comment",
-			},
 		})
 
 		-- Integration with nvim-cmp
