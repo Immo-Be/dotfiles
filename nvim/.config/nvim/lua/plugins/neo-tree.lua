@@ -2,6 +2,13 @@ return {
 	{
 		"nvim-neo-tree/neo-tree.nvim",
 		branch = "v3.x",
+		cmd = "Neotree",
+		keys = {
+			{ "<C-b>", ":Neotree toggle right<CR>", desc = "Toggle Neo-tree" },
+			{ "<C-\\>", ":Neotree reveal right<CR>", desc = "Reveal in Neo-tree" },
+			{ "<C-S-e>", ":Neotree focus<CR>", desc = "Focus Neo-tree" },
+			{ "<C-S-b>", ":Neotree close<CR>", desc = "Close Neo-tree" },
+		},
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"nvim-tree/nvim-web-devicons",
@@ -20,12 +27,6 @@ return {
 					},
 				},
 			})
-
-			-- Keybindings
-			vim.keymap.set("n", "<C-b>", ":Neotree toggle right<CR>", { noremap = true, silent = true })
-			vim.keymap.set("n", "<C-\\>", ":Neotree reveal right<CR>", { noremap = true, silent = true })
-			vim.keymap.set("n", "<C-S-e>", ":Neotree focus<CR>", { noremap = true, silent = true })
-			vim.keymap.set("n", "<C-S-b>", ":Neotree close<CR>", { noremap = true, silent = true })
 
 			-- Create :E command to open neo-tree in current buffer
 			vim.api.nvim_create_user_command("E", function()

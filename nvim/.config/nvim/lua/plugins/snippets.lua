@@ -57,7 +57,7 @@ return {
 				-- Display in a floating window
 				local buf = vim.api.nvim_create_buf(false, true)
 				vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-				vim.api.nvim_buf_set_option(buf, "modifiable", false)
+				vim.bo[buf].modifiable = false
 
 				local width = 60
 				local height = #lines
@@ -102,14 +102,34 @@ return {
 					["<C-f>"] = cmp.mapping.scroll_docs(4),
 					["<C-e>"] = cmp.mapping.abort(),
 					["<CR>"] = cmp.mapping.confirm({ select = true }),
+					-- Tab completion
+					["<Tab>"] = cmp.mapping(function(fallback)
+						if cmp.visible() then
+							cmp.select_next_item()
+						elseif luasnip.expand_or_jumpable() then
+							luasnip.expand_or_jump()
+						elseif has_words_before() then
+							cmp.complete()
+						else
+							fallback()
+						end
+					end, { "i", "s" }),
+					["<S-Tab>"] = cmp.mapping(function(fallback)
+						if cmp.visible() then
+							cmp.select_prev_item()
+						elseif luasnip.jumpable(-1) then
+							luasnip.jump(-1)
+						else
+							fallback()
+						end
+					end, { "i", "s" }),
 				}),
 				sources = cmp.config.sources({
-					{ name = "nvim_lsp" },
-					{ name = "luasnip" }, -- For luasnip users.
-					-- { name = "path" },
-					-- there has been a problem where i use this command mainly to open bash command in nvim and the bashls (lsp) would get the temporariy path instead of the "curren path". this is a workaround, hopefully won't break anyting
+					{ name = "nvim_lsp", priority = 1000 },
+					{ name = "luasnip", priority = 750 },
 					{
 						name = "path",
+						priority = 500,
 						option = {
 							get_cwd = function()
 								return vim.fn.getcwd()
@@ -117,7 +137,7 @@ return {
 						},
 					},
 				}, {
-					{ name = "buffer" },
+					{ name = "buffer", priority = 250 },
 				}),
 			})
 		end,

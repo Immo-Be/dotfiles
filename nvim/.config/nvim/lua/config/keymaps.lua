@@ -137,39 +137,7 @@ vim.keymap.set("n", "<leader>hm", function()
 end, { desc = "Git commit with message (staged changes)" })
 
 vim.keymap.set("n", "<leader>ha", function()
-	local diff = vim.fn.system("git diff --cached")
-	if diff == "" then
-		vim.notify("No staged changes to commit.", vim.log.levels.WARN)
-		return
-	end
-
-	local prompt = "Generate a concise, conventional commit message for the following git diff:\n" .. diff
-	vim.notify("Generating AI commit message...", vim.log.levels.INFO)
-
-	require("avante.api").ask({
-		prompt = prompt,
-		provider = "copilot", -- Assumes 'copilot' provider is configured in avante
-		on_finish = function(response)
-			if not response or response == "" then
-				vim.notify("AI did not return a commit message.", vim.log.levels.ERROR)
-				return
-			end
-
-			-- Clean quotes from the response
-			local message = response:gsub('^"', ""):gsub('"$', "")
-
-			vim.fn.jobstart({ "git", "commit", "-m", message }, {
-				on_exit = function(_, exit_code)
-					if exit_code == 0 then
-						vim.notify("Commit successful: " .. message, vim.log.levels.INFO)
-						require("gitsigns").refresh()
-					else
-						vim.notify("Commit failed", vim.log.levels.ERROR)
-					end
-				end,
-			})
-		end,
-	})
+	require("utils.git").commit_with_ai()
 end, { desc = "Git commit with AI-generated message" })
 
 -- Keybinding to view Git file history for the current file

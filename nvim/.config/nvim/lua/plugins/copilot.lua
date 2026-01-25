@@ -109,40 +109,15 @@ return {
 			local neogit = require("neogit")
 			neogit.setup({})
 
-			-- Inline AI commit generator
-			local function generate_commit_message()
-				local diff = vim.fn.system("git diff --cached")
-
-				if diff == "" then
-					vim.notify("No staged changes", vim.log.levels.WARN)
-					return
-				end
-
-				local prompt = "Generate a concise, conventional commit message for the following git diff:\n" .. diff
-
-				require("avante.api").ask({
-					prompt = prompt,
-					provider = "copilot",
-					on_finish = function(response)
-						if not response or response == "" then
-							vim.notify("AI did not return a commit message", vim.log.levels.ERROR)
-							return
-						end
-
-						vim.cmd("Neogit commit")
-						vim.defer_fn(function()
-							vim.api.nvim_put({ response }, "l", true, true)
-						end, 200)
-					end,
-				})
-			end
-
 			-- Expose as a user command instead of keymap
-			vim.api.nvim_create_user_command(
-				"AICommit",
-				generate_commit_message,
-				{ desc = "Generate AI commit message with Avante" }
-			)
+			vim.api.nvim_create_user_command("AICommit", function()
+				require("utils.git").generate_ai_commit_message(function(message)
+					vim.cmd("Neogit commit")
+					vim.defer_fn(function()
+						vim.api.nvim_put({ message }, "l", true, true)
+					end, 200)
+				end)
+			end, { desc = "Generate AI commit message with Avante" })
 		end,
 	},
 }

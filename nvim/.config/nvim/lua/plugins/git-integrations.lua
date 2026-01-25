@@ -1,7 +1,16 @@
 return {
-	{ "akinsho/git-conflict.nvim", version = "*", config = true },
+	{
+		"akinsho/git-conflict.nvim",
+		version = "*",
+		event = { "BufReadPost", "BufNewFile" },
+		config = true,
+	},
 	{
 		"sindrets/diffview.nvim",
+		cmd = { "DiffviewOpen", "DiffviewFileHistory" },
+		keys = {
+			{ "<leader>dh", ":DiffviewFileHistory %<CR>", desc = "File History (current file)" },
+		},
 		config = function()
 			require("diffview").setup({
 				view = {
@@ -65,6 +74,7 @@ return {
 	},
 	{
 		"NeogitOrg/neogit",
+		cmd = "Neogit",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"sindrets/diffview.nvim",
@@ -80,6 +90,7 @@ return {
 	},
 	{
 		"lewis6991/gitsigns.nvim",
+		event = { "BufReadPost", "BufNewFile" },
 		dependencies = "nvim-lua/plenary.nvim",
 		config = function()
 			require("gitsigns").setup({
