@@ -18,6 +18,9 @@ return {
 						Normal = { bg = colors.base },
 						NormalFloat = { bg = colors.base },
 						StatusLine = { bg = colors.base },
+						-- Indent-blankline subtle colors
+						IblIndent = { fg = "#2a2a37" }, -- Very dim gray
+						IblScope = { fg = "#3e4451" }, -- Slightly more visible for scope
 					}
 				end,
 				integrations = {
