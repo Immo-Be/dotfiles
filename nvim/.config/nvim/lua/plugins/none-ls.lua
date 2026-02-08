@@ -70,6 +70,12 @@ return {
 						return utils.root_has_file("biome.json")
 					end,
 				}),
+
+				-- YAML linting (via none-ls-extras)
+				require("none-ls.diagnostics.yamllint"),
+
+				-- Note: Shell (shellcheck, shfmt) and Markdown (markdownlint) are handled by
+				-- nvim-lint and conform.nvim respectively, as they're not available in none-ls-extras
 			},
 			-- Keep your root detection; Prettier will pick up local config/plugins
 			root_dir = require("null-ls.utils").root_pattern(
