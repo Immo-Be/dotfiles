@@ -42,10 +42,10 @@ local M = {
 				incremental_selection = {
 					enable = true,
 					keymaps = {
-						init_selection = "gnn", -- start selection at cursor
-						node_incremental = "grn", -- expand to next node (parent)
-						node_decremental = "grm", -- shrink
-						scope_incremental = "grc", -- optional
+						init_selection = "<CR>", -- Start selection with Enter
+						node_incremental = "<CR>", -- Expand selection with Enter
+						node_decremental = "-", -- Shrink selection with -
+						scope_incremental = "grc",
 					},
 				},
 
@@ -104,6 +104,8 @@ local M = {
 					},
 				},
 			})
+
+			vim.keymap.set("x", "+", "<CR>", { remap = true, desc = "Expand selection (alias for Enter)" })
 
 			-- Enable Sticky Scroll
 			require("treesitter-context").setup({
