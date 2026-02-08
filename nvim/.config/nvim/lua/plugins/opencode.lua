@@ -18,6 +18,7 @@ return {
 			local explain = require("opencode.config").opts.prompts.explain
 			require("opencode").prompt(explain.prompt, explain)
 		end, { desc = "Explain this" })
+
 		vim.keymap.set({ "n", "x" }, "<leader>oa", function()
 			require("opencode").ask("@this: ", { submit = true })
 		end, { desc = "Ask about this" })
