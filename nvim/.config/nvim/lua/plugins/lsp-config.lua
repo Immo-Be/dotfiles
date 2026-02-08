@@ -37,6 +37,7 @@ return {
 			on_attach = on_attach,
 			filetypes = { "astro" },
 		})
+		vim.lsp.enable("astro")
 
 		-- Bash LSP
 		vim.lsp.config("bashls", {
@@ -44,6 +45,7 @@ return {
 			on_attach = on_attach,
 			filetypes = { "sh", "bash", "zsh" },
 		})
+		vim.lsp.enable("bashls")
 
 		-- ✅ TypeScript/JavaScript via vtsls (great TSX/JSX support)
 		vim.lsp.config("vtsls", {
@@ -78,22 +80,38 @@ return {
 				},
 			},
 		})
+		vim.lsp.enable("vtsls")
 
-
-		-- If you really want to stick with the old server, uncomment this block instead:
-		-- lspconfig.ts_ls.setup({
-		--   capabilities = capabilities,
-		--   on_attach = on_attach,
-		--   filetypes = {
-		--     "typescript", "typescriptreact", "typescript.tsx",
-		--     "javascript", "javascriptreact", "javascript.jsx",
-		--   },
-		-- })
+		-- Lua LSP
+		vim.lsp.config("lua_ls", {
+			capabilities = capabilities,
+			on_attach = on_attach,
+			settings = {
+				Lua = {
+					diagnostics = { globals = { "vim" } },
+				},
+			},
+		})
+		vim.lsp.enable("lua_ls")
 
 		-- HTML, CSS, JSON
-		vim.lsp.config("html", { capabilities = capabilities })
-		vim.lsp.config("cssls", { capabilities = capabilities })
-		vim.lsp.config("jsonls", { capabilities = capabilities })
+		vim.lsp.config("html", {
+			capabilities = capabilities,
+			on_attach = on_attach,
+		})
+		vim.lsp.enable("html")
+
+		vim.lsp.config("cssls", {
+			capabilities = capabilities,
+			on_attach = on_attach,
+		})
+		vim.lsp.enable("cssls")
+
+		vim.lsp.config("jsonls", {
+			capabilities = capabilities,
+			on_attach = on_attach,
+		})
+		vim.lsp.enable("jsonls")
 
 		-- Custom go-to-definition to jump if there is only one result
 		local function smart_definition()
@@ -132,14 +150,5 @@ return {
 		vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, {})
 		vim.keymap.set("n", "<F2>", vim.lsp.buf.rename, {})
 		vim.keymap.set("n", "<leader>s", vim.lsp.buf.signature_help, {})
-
-		-- Lua LSP via new API (you can migrate others later if you like)
-		vim.lsp.config("lua_ls", {
-			settings = {
-				Lua = {
-					diagnostics = { globals = { "vim" } },
-				},
-			},
-		})
-	end,
+end,
 }
