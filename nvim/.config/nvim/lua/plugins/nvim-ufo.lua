@@ -42,9 +42,10 @@ return {
 		end
 
 		require("ufo").setup({
-			-- Use LSP as primary provider, fallback to treesitter, then indent
+			-- Use LSP as primary provider, fallback to treesitter
+			-- Only 2 providers allowed: main + fallback
 			provider_selector = function(bufnr, filetype, buftype)
-				return { "lsp", "treesitter", "indent" }
+				return { "lsp", "treesitter" }
 			end,
 			fold_virt_text_handler = handler,
 			-- Preview fold contents with hover
