@@ -64,18 +64,8 @@ return {
 			},
 		})
 
-		-- Auto-fold large files (>300 lines) to fold level 1
-		vim.api.nvim_create_autocmd("BufReadPost", {
-			group = vim.api.nvim_create_augroup("auto_fold_large_files", { clear = true }),
-			callback = function()
-				local line_count = vim.api.nvim_buf_line_count(0)
-				if line_count > 300 then
-					-- Close folds to level 1 for large files
-					vim.opt_local.foldlevel = 1
-					vim.opt_local.foldlevelstart = 1
-				end
-			end,
-		})
+		-- Note: Removed auto-fold for large files - all files start with folds open
+		-- Use zM to manually close all folds, or zc to close individual folds
 
 		-- Keybindings for fold management
 		vim.keymap.set("n", "zR", require("ufo").openAllFolds, { desc = "Open all folds" })
