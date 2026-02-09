@@ -5,8 +5,8 @@ return {
 	},
 	event = "BufReadPost", -- Load after buffer is read
 	config = function()
-		-- Enable fold column to show fold indicators
-		vim.o.foldcolumn = "1"
+		-- Disable fold column (no indicators on left side)
+		vim.o.foldcolumn = "0"
 		vim.o.foldlevel = 99 -- Start with all folds open by default
 		vim.o.foldlevelstart = 99 -- Open all folds when opening a file
 		vim.o.foldenable = true
