@@ -94,8 +94,9 @@ return {
 	},
 	keys = {
 		-- Flash search (like enhanced / search with labels)
+		-- Using <leader>s instead of 's' to preserve standard Vim 's' (substitute character)
 		{
-			"s",
+			"<leader>s",
 			mode = { "n", "x", "o" },
 			function()
 				require("flash").jump()
@@ -103,8 +104,9 @@ return {
 			desc = "Flash jump",
 		},
 		-- Flash treesitter (select by syntax node)
+		-- Using <leader>S instead of 'S' to preserve standard Vim 'S' (substitute line)
 		{
-			"S",
+			"<leader>S",
 			mode = { "n", "x", "o" },
 			function()
 				require("flash").treesitter()
