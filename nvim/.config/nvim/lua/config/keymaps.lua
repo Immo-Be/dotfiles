@@ -33,12 +33,12 @@ vim.keymap.set("n", "<leader>tx", ":tabclose<CR>", { desc = "Close tab", noremap
 
 vim.keymap.set("n", "]b", ":bnext<CR>", { desc = "Next buffer", noremap = true, silent = true })
 vim.keymap.set("n", "[b", ":bprevious<CR>", { desc = "Previous buffer", noremap = true, silent = true })
-vim.keymap.set("n", "<leader>b", ":bnext<CR>", { desc = "Next buffer", noremap = true, silent = true })
--- It is a bit annoying but we cannot use <leader>bx here, because it <leader>b is used to show active buffers (bx makes the execution of b wait for another key)
-vim.keymap.set("n", "<leader><leader>bx", ":bwipeout<CR>", { desc = "Wipeout Buffer" }) -- Wipe buffer completely
+-- Removed <leader>b conflict - using Telescope's builtin.buffers instead (defined in telescope.lua)
+-- Use ]b and [b for quick buffer navigation, or <leader>b for interactive buffer picker
+vim.keymap.set("n", "<leader>bx", ":bwipeout<CR>", { desc = "Wipeout Buffer" }) -- Wipe buffer completely
 
 -- Close all buffers
-vim.keymap.set("n", "<leader><leader>ba", ":bufdo bwipeout<CR>", { desc = "Close all buffers" })
+vim.keymap.set("n", "<leader>ba", ":bufdo bwipeout<CR>", { desc = "Close all buffers" })
 
 -- remap=true so we can reuse the existing "[r" motion
 -- jumps to the last return() in the buffer
