@@ -23,6 +23,7 @@ return {
 			"saadparwaiz1/cmp_luasnip",
 			"hrsh7th/cmp-path", -- Make sure path source is installed
 			"hrsh7th/cmp-buffer", -- Make sure buffer source is installed
+			"zbirenbaum/copilot-cmp", -- Copilot completion source
 		},
 		config = function()
 			local cmp = require("cmp")
@@ -118,6 +119,7 @@ return {
 					end, { "i", "s" }),
 				}),
 				sources = cmp.config.sources({
+					{ name = "copilot", priority = 1100 }, -- Copilot suggestions (highest priority)
 					{ name = "nvim_lsp", priority = 1000 },
 					{ name = "luasnip", priority = 750 },
 					{
@@ -132,6 +134,21 @@ return {
 				}, {
 					{ name = "buffer", priority = 250 },
 				}),
+				-- Format completion items to show source
+				formatting = {
+					format = function(entry, vim_item)
+						-- Add source name with icon
+						local source_names = {
+							copilot = "  Copilot",
+							nvim_lsp = "  LSP",
+							luasnip = "  Snippet",
+							buffer = "  Buffer",
+							path = "  Path",
+						}
+						vim_item.menu = source_names[entry.source.name] or entry.source.name
+						return vim_item
+					end,
+				},
 			})
 		end,
 	},
