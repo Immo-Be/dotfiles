@@ -36,7 +36,7 @@ local M = {
 				highlight = { enable = true, additional_vim_regex_highlighting = false },
 				indent = { enable = true },
 				autotag = { enable = true }, -- Auto-close & rename JSX/Svelte tags
-				rainbow = { enable = true, extended_mode = true, max_file_lines = nil }, -- Colored brackets
+				-- Note: rainbow-delimiters is configured separately below (not in treesitter config)
 
 				-- ⬇️ Incremental selection = grow/shrink by syntax node
 				incremental_selection = {
@@ -124,6 +124,32 @@ local M = {
 			vim.keymap.set("n", "[f", function()
 				require("treesitter-context").go_to_context()
 			end, { desc = "Jump to sticky function" })
+
+			-- Rainbow delimiters configuration (modern API)
+			local rainbow_delimiters = require("rainbow-delimiters")
+			require("rainbow-delimiters.setup").setup({
+				strategy = {
+					[""] = rainbow_delimiters.strategy["global"], -- Global strategy for all filetypes
+					vim = rainbow_delimiters.strategy["local"], -- Better for vim files
+				},
+				query = {
+					[""] = "rainbow-delimiters", -- Use default query for all filetypes
+					lua = "rainbow-blocks", -- Use blocks query for Lua (functions, tables)
+				},
+				priority = {
+					[""] = 110,
+					lua = 210,
+				},
+				highlight = {
+					"RainbowDelimiterRed",
+					"RainbowDelimiterYellow",
+					"RainbowDelimiterBlue",
+					"RainbowDelimiterOrange",
+					"RainbowDelimiterGreen",
+					"RainbowDelimiterViolet",
+					"RainbowDelimiterCyan",
+				},
+			})
 		end,
 	},
 }
