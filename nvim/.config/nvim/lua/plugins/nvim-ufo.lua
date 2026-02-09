@@ -42,12 +42,24 @@ return {
 		end
 
 		require("ufo").setup({
-			-- Use LSP as primary provider, fallback to treesitter
-			-- Only 2 providers allowed: main + fallback
+			-- Use treesitter as primary for React/JSX files, LSP as fallback
+			-- This gives better granularity for nested functions in components
 			provider_selector = function(bufnr, filetype, buftype)
-				return { "lsp", "treesitter" }
+				local ftMap = {
+					typescriptreact = { "treesitter", "indent" },
+					javascriptreact = { "treesitter", "indent" },
+					typescript = { "lsp", "treesitter" },
+					javascript = { "lsp", "treesitter" },
+				}
+				return ftMap[filetype] or { "lsp", "treesitter" }
 			end,
 			fold_virt_text_handler = handler,
+			-- Enable close_fold_kinds for more granular folding
+			close_fold_kinds_for_ft = {
+				default = {},
+				typescriptreact = { "imports", "comment" },
+				javascriptreact = { "imports", "comment" },
+			},
 			-- Preview fold contents with hover
 			preview = {
 				win_config = {
@@ -87,11 +99,18 @@ return {
 			end
 		end, { desc = "Peek fold or show hover" })
 
-		-- Additional useful fold keybindings (using default vim motions)
-		-- zc - close fold under cursor
-		-- zo - open fold under cursor
+		-- Use zm/zr for incremental folding (more/less folding)
+		-- This helps navigate nested folds in React components
+		vim.keymap.set("n", "zr", "zr", { desc = "Reduce fold level (open one level)" })
+		vim.keymap.set("n", "zm", "zm", { desc = "More folding (close one level)" })
+
+		-- Standard vim fold commands:
+		-- zc - close fold under cursor (closes innermost fold)
+		-- zo - open fold under cursor  
 		-- za - toggle fold under cursor
-		-- zC - close all folds recursively under cursor
-		-- zO - open all folds recursively under cursor
+		-- zO - open all nested folds under cursor
+		-- zC - close all nested folds under cursor
+		-- [z - move to start of current fold
+		-- ]z - move to end of current fold
 	end,
 }
