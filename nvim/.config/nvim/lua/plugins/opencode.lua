@@ -7,7 +7,8 @@ return {
 	},
 	config = function()
 		vim.g.opencode_opts = {
-			-- Your configuration, if any — see `lua/opencode/config.lua`
+			-- Open in a vertical split instead of floating/embedded
+			view = "split",
 		}
 
 		-- Required for `vim.g.opencode_opts.auto_reload`
@@ -28,9 +29,10 @@ return {
 		vim.keymap.set({ "n", "x" }, "<leader>o+", function()
 			require("opencode").prompt("@this")
 		end, { desc = "Add this" })
+		-- Changed to use split view instead of toggle
 		vim.keymap.set("n", "<leader>ot", function()
-			require("opencode").toggle()
-		end, { desc = "Toggle embedded" })
+			require("opencode").open()
+		end, { desc = "Open OpenCode split" })
 		vim.keymap.set("n", "<leader>oc", function()
 			require("opencode").command()
 		end, { desc = "Select command" })
