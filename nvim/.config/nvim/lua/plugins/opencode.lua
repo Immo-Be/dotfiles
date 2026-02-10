@@ -29,10 +29,10 @@ return {
 		vim.keymap.set({ "n", "x" }, "<leader>o+", function()
 			require("opencode").prompt("@this")
 		end, { desc = "Add this" })
-		-- Toggle OpenCode in split view
+		-- Changed to use split view instead of toggle
 		vim.keymap.set("n", "<leader>ot", function()
-			require("opencode").toggle()
-		end, { desc = "Toggle OpenCode split" })
+			require("opencode").open()
+		end, { desc = "Open OpenCode split" })
 		vim.keymap.set("n", "<leader>oc", function()
 			require("opencode").command()
 		end, { desc = "Select command" })
