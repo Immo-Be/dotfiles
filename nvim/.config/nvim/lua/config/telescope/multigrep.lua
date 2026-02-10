@@ -7,15 +7,15 @@ local action_state = require("telescope.actions.state")
 
 local M = {}
 
--- Custom action: Open file in new vertical split to the far left
+-- Custom action: Open file in new vertical split on the right
 local open_in_left_split = function(prompt_bufnr)
 	local entry = action_state.get_selected_entry()
 	actions.close(prompt_bufnr)
 	
-	-- Create a vertical split to the far left
-	vim.cmd("leftabove vsplit")
+	-- Create a vertical split on the right
+	vim.cmd("rightbelow vsplit")
 	
-	-- Open the selected file at the correct line (for grep results)
+	-- Open the selected file at the correct line (for grep results) in the new right split
 	if entry.path or entry.filename then
 		local file = entry.path or entry.filename
 		local lnum = entry.lnum or 1
