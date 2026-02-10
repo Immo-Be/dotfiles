@@ -54,16 +54,16 @@ return {
 					},
 					file_ignore_patterns = {}, -- Optional: Ignore .git folder
 					no_ignore = true, -- ✅ Show gitignored files
-					mappings = {
-						i = {
-							["<C-q>"] = smart_send_to_qflist,
-							["l"] = open_in_left_split,
-						},
-						n = {
-							["<C-q>"] = smart_send_to_qflist,
-							["l"] = open_in_left_split,
-						},
+				mappings = {
+					i = {
+						["<C-q>"] = smart_send_to_qflist,
+						-- No 'l' mapping in insert mode - allow typing 'l' normally
 					},
+					n = {
+						["<C-q>"] = smart_send_to_qflist,
+						["l"] = open_in_left_split,
+					},
+				},
 				},
 				pickers = {
 					find_files = {

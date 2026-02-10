@@ -67,7 +67,7 @@ local live_multigrep = function(opts)
 			attach_mappings = function(_, map)
 				map("i", "<Up>", actions.cycle_history_prev)
 				map("i", "<Down>", actions.cycle_history_next)
-				map("i", "l", open_in_left_split)
+				-- Only map 'l' in normal mode, not insert mode (allow typing 'l')
 				map("n", "l", open_in_left_split)
 				return true
 			end,
