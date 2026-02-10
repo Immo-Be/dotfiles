@@ -14,6 +14,7 @@ return {
 			-- Opens marked items in a quickfix list.
 			-- if there are no marked items, it opens all items in a quickfix list.
 			local actions = require("telescope.actions")
+			local action_state = require("telescope.actions.state")
 
 			local smart_send_to_qflist = function(prompt_bufnr)
 				local picker = require("telescope.actions.state").get_current_picker(prompt_bufnr)
@@ -27,6 +28,22 @@ return {
 				actions.open_qflist(prompt_bufnr)
 			end
 
+			-- Custom action: Open file in new vertical split to the far left
+			local open_in_left_split = function(prompt_bufnr)
+				local entry = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				
+				-- Create a vertical split to the far left
+				vim.cmd("leftabove vsplit")
+				
+				-- Open the selected file
+				if entry.path or entry.filename then
+					vim.cmd("edit " .. (entry.path or entry.filename))
+				elseif entry.bufnr then
+					vim.cmd("buffer " .. entry.bufnr)
+				end
+			end
+
 			-- Setup Telescope with UI-Select extension
 			telescope.setup({
 				defaults = {
@@ -38,8 +55,14 @@ return {
 					file_ignore_patterns = {}, -- Optional: Ignore .git folder
 					no_ignore = true, -- ✅ Show gitignored files
 					mappings = {
-						i = { ["<C-q>"] = smart_send_to_qflist },
-						n = { ["<C-q>"] = smart_send_to_qflist },
+						i = {
+							["<C-q>"] = smart_send_to_qflist,
+							["l"] = open_in_left_split,
+						},
+						n = {
+							["<C-q>"] = smart_send_to_qflist,
+							["l"] = open_in_left_split,
+						},
 					},
 				},
 				pickers = {
