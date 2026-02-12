@@ -44,6 +44,22 @@ return {
 				end
 			end
 
+			-- Custom action: Open file in new horizontal split below
+			local open_in_horizontal_split = function(prompt_bufnr)
+				local entry = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				
+				-- Create a horizontal split below
+				vim.cmd("rightbelow split")
+				
+				-- Open the selected file in the new bottom split
+				if entry.path or entry.filename then
+					vim.cmd("edit " .. (entry.path or entry.filename))
+				elseif entry.bufnr then
+					vim.cmd("buffer " .. entry.bufnr)
+				end
+			end
+
 			-- Setup Telescope with UI-Select extension
 			telescope.setup({
 				defaults = {
@@ -57,11 +73,12 @@ return {
 				mappings = {
 					i = {
 						["<C-q>"] = smart_send_to_qflist,
-						-- No 'l' mapping in insert mode - allow typing 'l' normally
+						-- No 'l' or 'h' mapping in insert mode - allow typing normally
 					},
 					n = {
 						["<C-q>"] = smart_send_to_qflist,
 						["l"] = open_in_left_split,
+						["h"] = open_in_horizontal_split,
 					},
 				},
 				},
