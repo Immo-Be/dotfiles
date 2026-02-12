@@ -90,6 +90,11 @@ vim.keymap.set("n", "<C-j>", "<C-w>j", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-h>", "<C-w>h", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-l>", "<C-w>l", { noremap = true, silent = true })
 
+-- Quick window resizing
+vim.keymap.set("n", "<leader>+", ":vertical resize +5<CR>", { desc = "Increase window width", silent = true })
+vim.keymap.set("n", "<leader>-", ":vertical resize -5<CR>", { desc = "Decrease window width", silent = true })
+vim.keymap.set("n", "<leader>=", "<C-w>=", { desc = "Equalize window sizes", silent = true })
+
 -- Yank / delete to system clipboard by default
 vim.keymap.set("n", "y", '"+y', { noremap = true })
 vim.keymap.set("v", "y", '"+y', { noremap = true })
