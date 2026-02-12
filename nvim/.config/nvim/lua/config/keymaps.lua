@@ -23,8 +23,36 @@ vim.keymap.set("n", "<C-u>", "<C-u>zz", { noremap = true, silent = true })
 -- Recommend for avante.nvim: views can only be fully collapsed with the global statusline
 vim.opt.laststatus = 3
 
-vim.keymap.set("n", "]e", vim.diagnostic.goto_next, { desc = "Next error" })
-vim.keymap.set("n", "[e", vim.diagnostic.goto_prev, { desc = "Previous error" })
+-- Enhanced diagnostic navigation with centering and auto-float
+vim.keymap.set("n", "]e", function()
+	vim.diagnostic.goto_next()
+	vim.cmd("normal! zz") -- Center screen
+	-- Show diagnostic float after a short delay
+	vim.defer_fn(function()
+		vim.diagnostic.open_float(nil, {
+			focusable = false,
+			close_events = { "BufLeave", "CursorMoved", "InsertEnter" },
+			border = "rounded",
+			source = "always",
+			prefix = "● ",
+		})
+	end, 100)
+end, { desc = "Next error (centered with float)" })
+
+vim.keymap.set("n", "[e", function()
+	vim.diagnostic.goto_prev()
+	vim.cmd("normal! zz") -- Center screen
+	-- Show diagnostic float after a short delay
+	vim.defer_fn(function()
+		vim.diagnostic.open_float(nil, {
+			focusable = false,
+			close_events = { "BufLeave", "CursorMoved", "InsertEnter" },
+			border = "rounded",
+			source = "always",
+			prefix = "● ",
+		})
+	end, 100)
+end, { desc = "Previous error (centered with float)" })
 
 vim.keymap.set("n", "]t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
 vim.keymap.set("n", "[t", ":tabprevious<CR>", { desc = "Previous tab", noremap = true, silent = true })
