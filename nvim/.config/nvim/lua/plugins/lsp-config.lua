@@ -139,7 +139,12 @@ return {
 		local function definition_in_vsplit()
 			local params = vim.lsp.util.make_position_params()
 			vim.lsp.buf_request(0, "textDocument/definition", params, function(err, result, ctx, config)
-				if err or not result or vim.tbl_isempty(result) then
+				if err then
+					vim.notify("LSP Error: " .. tostring(err), vim.log.levels.ERROR)
+					return
+				end
+				
+				if not result or vim.tbl_isempty(result) then
 					vim.notify("No definition found", vim.log.levels.WARN)
 					return
 				end
@@ -161,8 +166,9 @@ return {
 					-- Open split first
 					vim.cmd("rightbelow vsplit")
 					
-					-- Open the file
-					vim.cmd("edit " .. vim.uri_to_fname(uri))
+					-- Open the file (need to escape the path properly)
+					local fname = vim.uri_to_fname(uri)
+					vim.cmd("edit " .. vim.fn.fnameescape(fname))
 					
 					-- Jump to the position
 					local line = range.start.line + 1
