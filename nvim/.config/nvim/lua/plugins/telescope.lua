@@ -118,6 +118,7 @@ return {
 
 			-- Keybindings
 			vim.keymap.set("n", "<leader>f", builtin.find_files, { desc = "Find Files" })
+			vim.keymap.set("n", "<leader>fr", builtin.resume, { desc = "Resume last Telescope picker" })
 			vim.keymap.set("n", "<leader>b", builtin.buffers, { desc = "Buffers" })
 			vim.keymap.set("n", "<leader>h", builtin.help_tags, { desc = "Help Tags" })
 
