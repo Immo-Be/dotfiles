@@ -60,6 +60,22 @@ return {
 				end
 			end
 
+			-- Custom action: Open file in vertical split (replaces current window)
+			local open_in_vsplit_current = function(prompt_bufnr)
+				local entry = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				
+				-- Split current window vertically
+				vim.cmd("vsplit")
+				
+				-- Open the selected file in the new split
+				if entry.path or entry.filename then
+					vim.cmd("edit " .. (entry.path or entry.filename))
+				elseif entry.bufnr then
+					vim.cmd("buffer " .. entry.bufnr)
+				end
+			end
+
 			-- Setup Telescope with UI-Select extension
 			telescope.setup({
 				defaults = {
@@ -79,6 +95,7 @@ return {
 						["<C-q>"] = smart_send_to_qflist,
 						["l"] = open_in_left_split,
 						["h"] = open_in_horizontal_split,
+						["v"] = open_in_vsplit_current,
 					},
 				},
 				},
