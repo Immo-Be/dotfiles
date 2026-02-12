@@ -147,15 +147,30 @@ return {
 				local client = vim.lsp.get_client_by_id(ctx.client_id)
 				local position_encoding = (client and client.offset_encoding) or "utf-16"
 
-				-- Open a vertical split on the right
-				vim.cmd("rightbelow vsplit")
-
 				if vim.islist(result) and #result > 1 then
+					-- Multiple definitions - open quickfix list
+					vim.cmd("rightbelow vsplit")
 					vim.fn.setqflist({}, " ", { title = "LSP Definitions", items = vim.lsp.util.locations_to_items(result, position_encoding) })
 					vim.cmd("copen")
 				else
+					-- Single definition - manually open file in new split
 					local location = vim.islist(result) and result[1] or result
-					vim.lsp.util.jump_to_location(location, position_encoding)
+					local uri = location.uri or location.targetUri
+					local range = location.range or location.targetRange
+					
+					-- Open split first
+					vim.cmd("rightbelow vsplit")
+					
+					-- Open the file
+					vim.cmd("edit " .. vim.uri_to_fname(uri))
+					
+					-- Jump to the position
+					local line = range.start.line + 1
+					local col = range.start.character + 1
+					vim.api.nvim_win_set_cursor(0, { line, col - 1 })
+					
+					-- Center the screen
+					vim.cmd("normal! zz")
 				end
 			end)
 		end
