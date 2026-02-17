@@ -89,6 +89,8 @@ return {
 				mappings = {
 					i = {
 						["<C-q>"] = smart_send_to_qflist,
+						["<Up>"] = actions.cycle_history_prev,
+						["<Down>"] = actions.cycle_history_next,
 						-- No 'l' or 'h' mapping in insert mode - allow typing normally
 					},
 					n = {
@@ -118,7 +120,6 @@ return {
 
 			-- Keybindings
 			vim.keymap.set("n", "<leader>f", builtin.find_files, { desc = "Find Files" })
-			vim.keymap.set("n", "<leader>fr", builtin.resume, { desc = "Resume last Telescope picker" })
 			vim.keymap.set("n", "<leader>b", builtin.buffers, { desc = "Buffers" })
 			vim.keymap.set("n", "<leader>h", builtin.help_tags, { desc = "Help Tags" })
 
