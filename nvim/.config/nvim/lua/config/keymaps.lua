@@ -129,22 +129,25 @@ vim.keymap.set("v", "y", '"+y', { noremap = true })
 vim.keymap.set("n", "yy", '"+yy', { noremap = true })
 -- Make Y behave like y$, yanking from the cursor to the end of the line
 vim.keymap.set("n", "Y", "y$", { noremap = true })
---
--- vim.keymap.set("v", "d", '"+d', { noremap = true })
--- vim.keymap.set("n", "d", '"+d', { noremap = true })
--- vim.keymap.set("n", "dd", '"+dd', { noremap = true })
 
--- --- ADD THESE LINES FOR IN-LINE PASTE ---
--- "Put" from system clipboard without creating a new line
--- The `g` prefix tells Neovim to put the text after the cursor.
-vim.keymap.set("n", "<leader>p", '"+gp', { noremap = true })
-vim.keymap.set("n", "<leader>P", '"+gP', { noremap = true })
+-- Delete (cut) to system clipboard for larger operations
+-- This makes delete work like "cut" for larger operations (dd, dw, dap, etc.)
+-- Small deletes (x, single character) keep default behavior
+vim.keymap.set("n", "dd", '"+dd', { noremap = true })
+vim.keymap.set("n", "d", '"+d', { noremap = true })
+vim.keymap.set("v", "d", '"+d', { noremap = true })
 
--- --- OR, REMAP 'p' AND 'P' DIRECTLY ---
--- This might feel more intuitive if you always want this behavior.
--- However, it will remove the default Neovim 'p' and 'P' behavior.
--- vim.keymap.set("n", "p", '"+gp', { noremap = true })
--- vim.keymap.set("n", "P", '"+gP', { noremap = true })
+-- Paste from system clipboard
+-- Normal mode: paste from system clipboard
+vim.keymap.set("n", "p", '"+p', { noremap = true })
+vim.keymap.set("n", "P", '"+P', { noremap = true })
+
+-- Visual mode: paste from system clipboard without yanking replaced text
+-- This prevents the replaced text from overwriting your clipboard
+vim.keymap.set("v", "p", '"+p', { noremap = true })
+vim.keymap.set("v", "P", '"+P', { noremap = true })
+
+-- Note: You can still access Neovim's unnamed register with ""p if needed
 
 -- undotree toggle
 vim.keymap.set("n", "<leader><F5>", vim.cmd.UndotreeToggle)
@@ -172,6 +175,10 @@ end, { desc = "Git commit with message (staged changes)" })
 vim.keymap.set("n", "<leader>ha", function()
 	require("utils.git").commit_with_ai()
 end, { desc = "Git commit with AI-generated message" })
+
+vim.keymap.set("n", "<leader>hp", function()
+	require("utils.git").push_with_confirmation()
+end, { desc = "Git push (with confirmation)" })
 
 -- Keybinding to view Git file history for the current file
 vim.keymap.set("n", "<leader>hg", ":DiffviewFileHistory %<CR>", {
