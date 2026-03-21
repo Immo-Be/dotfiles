@@ -185,6 +185,11 @@ vim.keymap.set("n", "<leader>hg", ":DiffviewFileHistory %<CR>", {
 	desc = "Git file history (current file)",
 	silent = true,
 })
+-- Trace the line evolution of the visual selection
+vim.keymap.set("v", "<leader>hg", ":'<,'>DiffviewFileHistory<CR>", {
+	desc = "Git line history (selection)",
+	silent = true,
+})
 
 -- Keybinding to view Git history for the entire project
 vim.keymap.set("n", "<leader>hG", ":DiffviewFileHistory<CR>", {
