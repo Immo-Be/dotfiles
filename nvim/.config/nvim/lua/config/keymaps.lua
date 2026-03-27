@@ -56,7 +56,6 @@ end, { desc = "Previous error (centered with float)" })
 
 vim.keymap.set("n", "]t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
 vim.keymap.set("n", "[t", ":tabprevious<CR>", { desc = "Previous tab", noremap = true, silent = true })
-vim.keymap.set("n", "<leader>t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
 vim.keymap.set("n", "<leader>tx", ":tabclose<CR>", { desc = "Close tab", noremap = true, silent = true })
 
 vim.keymap.set("n", "]b", ":bnext<CR>", { desc = "Next buffer", noremap = true, silent = true })
