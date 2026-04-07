@@ -11,10 +11,10 @@ local M = {}
 local open_in_left_split = function(prompt_bufnr)
 	local entry = action_state.get_selected_entry()
 	actions.close(prompt_bufnr)
-	
+
 	-- Create a vertical split on the right
 	vim.cmd("rightbelow vsplit")
-	
+
 	-- Open the selected file at the correct line (for grep results) in the new right split
 	if entry.path or entry.filename then
 		local file = entry.path or entry.filename
@@ -29,10 +29,10 @@ end
 local open_in_horizontal_split = function(prompt_bufnr)
 	local entry = action_state.get_selected_entry()
 	actions.close(prompt_bufnr)
-	
+
 	-- Create a horizontal split below
 	vim.cmd("rightbelow split")
-	
+
 	-- Open the selected file at the correct line (for grep results) in the new bottom split
 	if entry.path or entry.filename then
 		local file = entry.path or entry.filename
@@ -47,10 +47,10 @@ end
 local open_in_vsplit_current = function(prompt_bufnr)
 	local entry = action_state.get_selected_entry()
 	actions.close(prompt_bufnr)
-	
+
 	-- Split current window vertically
 	vim.cmd("vsplit")
-	
+
 	-- Open the selected file at the correct line (for grep results) in the new split
 	if entry.path or entry.filename then
 		local file = entry.path or entry.filename
@@ -83,11 +83,11 @@ local live_multigrep = function(opts)
 				table.insert(args, pieces[2])
 			end
 
-			---@diagnostic disable-next-line: deprecated
-			return vim.tbl_flatten({
+			vim.list_extend(
 				args,
-				{ "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case" },
-			})
+				{ "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case" }
+			)
+			return args
 		end,
 		entry_maker = make_entry.gen_from_vimgrep(opts),
 		cwd = opts.cwd,

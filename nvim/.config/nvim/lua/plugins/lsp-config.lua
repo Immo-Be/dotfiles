@@ -3,16 +3,16 @@ local M = {}
 function M.setup()
 	require("mason").setup()
 	require("mason-lspconfig").setup({
-			ensure_installed = {
-				"lua_ls",
-				"vtsls", -- ✅ replaces ts_ls/tsserver
-				"html",
-				"cssls",
-				"jsonls",
-				"astro",
-				"bashls", -- Add bashls for shell script support
-			},
-})
+		ensure_installed = {
+			"lua_ls",
+			"vtsls", -- ✅ replaces ts_ls/tsserver
+			"html",
+			"cssls",
+			"jsonls",
+			"astro",
+			"bashls", -- Add bashls for shell script support
+		},
+	})
 
 	local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
@@ -25,78 +25,78 @@ function M.setup()
 	end
 
 	vim.lsp.config("astro", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-			filetypes = { "astro" },
-})
+		capabilities = capabilities,
+		on_attach = on_attach,
+		filetypes = { "astro" },
+	})
 	vim.lsp.enable("astro")
 
 	vim.lsp.config("bashls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-			filetypes = { "sh", "bash", "zsh" },
-})
+		capabilities = capabilities,
+		on_attach = on_attach,
+		filetypes = { "sh", "bash", "zsh" },
+	})
 	vim.lsp.enable("bashls")
 
 	vim.lsp.config("vtsls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-			filetypes = {
-				"typescript",
-				"typescriptreact",
-				"typescript.tsx",
-				"javascript",
-				"javascriptreact",
-				"javascript.jsx",
-			},
-			settings = {
-				typescript = {
-					inlayHints = {
-						includeInlayParameterNameHints = "all",
-						includeInlayVariableTypeHints = true,
-						includeInlayFunctionLikeReturnTypeHints = true,
-						includeInlayPropertyDeclarationTypeHints = true,
-					},
-				},
-				javascript = {
-					inlayHints = {
-						includeInlayParameterNameHints = "all",
-						includeInlayVariableTypeHints = true,
-						includeInlayFunctionLikeReturnTypeHints = true,
-						includeInlayPropertyDeclarationTypeHints = true,
-					},
+		capabilities = capabilities,
+		on_attach = on_attach,
+		filetypes = {
+			"typescript",
+			"typescriptreact",
+			"typescript.tsx",
+			"javascript",
+			"javascriptreact",
+			"javascript.jsx",
+		},
+		settings = {
+			typescript = {
+				inlayHints = {
+					includeInlayParameterNameHints = "all",
+					includeInlayVariableTypeHints = true,
+					includeInlayFunctionLikeReturnTypeHints = true,
+					includeInlayPropertyDeclarationTypeHints = true,
 				},
 			},
-})
+			javascript = {
+				inlayHints = {
+					includeInlayParameterNameHints = "all",
+					includeInlayVariableTypeHints = true,
+					includeInlayFunctionLikeReturnTypeHints = true,
+					includeInlayPropertyDeclarationTypeHints = true,
+				},
+			},
+		},
+	})
 	vim.lsp.enable("vtsls")
 
 	vim.lsp.config("lua_ls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-			settings = {
-				Lua = {
-					diagnostics = { globals = { "vim" } },
-				},
+		capabilities = capabilities,
+		on_attach = on_attach,
+		settings = {
+			Lua = {
+				diagnostics = { globals = { "vim" } },
 			},
-})
+		},
+	})
 	vim.lsp.enable("lua_ls")
 
 	vim.lsp.config("html", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-})
+		capabilities = capabilities,
+		on_attach = on_attach,
+	})
 	vim.lsp.enable("html")
 
 	vim.lsp.config("cssls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-})
+		capabilities = capabilities,
+		on_attach = on_attach,
+	})
 	vim.lsp.enable("cssls")
 
 	vim.lsp.config("jsonls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-})
+		capabilities = capabilities,
+		on_attach = on_attach,
+	})
 	vim.lsp.enable("jsonls")
 
 	local function smart_definition()
@@ -111,7 +111,11 @@ function M.setup()
 			local position_encoding = (client and client.offset_encoding) or "utf-16"
 
 			if vim.islist(result) and #result > 1 then
-				vim.fn.setqflist({}, " ", { title = "LSP Definitions", items = vim.lsp.util.locations_to_items(result, position_encoding) })
+				vim.fn.setqflist(
+					{},
+					" ",
+					{ title = "LSP Definitions", items = vim.lsp.util.locations_to_items(result, position_encoding) }
+				)
 				vim.cmd("copen")
 			else
 				local location = vim.islist(result) and result[1] or result
@@ -121,7 +125,12 @@ function M.setup()
 	end
 
 	local telescope_builtin = require("telescope.builtin")
-	vim.keymap.set("n", "gr", telescope_builtin.lsp_references, { noremap = true, silent = true, desc = "Telescope LSP References" })
+	vim.keymap.set(
+		"n",
+		"gr",
+		telescope_builtin.lsp_references,
+		{ noremap = true, silent = true, desc = "Telescope LSP References" }
+	)
 	vim.keymap.set("n", "<C-e>", vim.lsp.buf.hover, {})
 	vim.keymap.set("n", "gd", smart_definition, { noremap = true, silent = true, desc = "Go to definition" })
 	vim.keymap.set("n", "gD", vim.lsp.buf.declaration, {})

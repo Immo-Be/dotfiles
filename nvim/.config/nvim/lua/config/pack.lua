@@ -87,12 +87,19 @@ end
 
 local build_hooks = {
 	["avante.nvim"] = {
-		{ shell = vim.fn.has("win32") == 1 and "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false" or "make" },
+		{
+			shell = vim.fn.has("win32") == 1
+					and "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false"
+				or "make",
+		},
 	},
 	["fzf"] = {
-		{ load = true, func = function()
-			vim.fn["fzf#install"]()
-		end },
+		{
+			load = true,
+			func = function()
+				vim.fn["fzf#install"]()
+			end,
+		},
 	},
 	["nvim-treesitter"] = {
 		{ load = true, command = "TSUpdate" },
