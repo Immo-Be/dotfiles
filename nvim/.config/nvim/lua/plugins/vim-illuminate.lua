@@ -1,8 +1,7 @@
-return {
-	"RRethy/vim-illuminate",
-	event = "BufReadPost",
-	config = function()
-		require("illuminate").configure({
+local M = {}
+
+function M.setup()
+	require("illuminate").configure({
 			-- Providers: priority order for getting references
 			providers = {
 				"lsp", -- Use LSP for semantic highlighting (best)
@@ -39,25 +38,23 @@ return {
 			},
 			-- Minimum number of matches required to highlight (avoid highlighting common words)
 			min_count_to_highlight = 2,
-		})
+	})
 
-		-- Set subtle highlight style (soft underline, no background)
-		vim.api.nvim_set_hl(0, "IlluminatedWordText", { underline = true })
-		vim.api.nvim_set_hl(0, "IlluminatedWordRead", { underline = true })
-		vim.api.nvim_set_hl(0, "IlluminatedWordWrite", { underline = true, bold = true })
+	vim.api.nvim_set_hl(0, "IlluminatedWordText", { underline = true })
+	vim.api.nvim_set_hl(0, "IlluminatedWordRead", { underline = true })
+	vim.api.nvim_set_hl(0, "IlluminatedWordWrite", { underline = true, bold = true })
 
-		-- Keybindings for navigating between references
-		vim.keymap.set("n", "]r", function()
-			require("illuminate").goto_next_reference()
-		end, { desc = "Next reference" })
+	vim.keymap.set("n", "]r", function()
+		require("illuminate").goto_next_reference()
+	end, { desc = "Next reference" })
 
-		vim.keymap.set("n", "[r", function()
-			require("illuminate").goto_prev_reference()
-		end, { desc = "Previous reference" })
+	vim.keymap.set("n", "[r", function()
+		require("illuminate").goto_prev_reference()
+	end, { desc = "Previous reference" })
 
-		-- Optional: Add a toggle command for illuminate
-		vim.api.nvim_create_user_command("IlluminateToggle", function()
-			require("illuminate").toggle()
-		end, { desc = "Toggle illuminate highlighting" })
-	end,
-}
+	vim.api.nvim_create_user_command("IlluminateToggle", function()
+		require("illuminate").toggle()
+	end, { desc = "Toggle illuminate highlighting" })
+end
+
+return M

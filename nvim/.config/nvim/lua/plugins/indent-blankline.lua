@@ -1,9 +1,6 @@
-return {
-	"lukas-reineke/indent-blankline.nvim",
-	desc = "Visual indent guides with scope highlighting",
-	main = "ibl",
-	event = { "BufReadPost", "BufNewFile" },
-	opts = {
+local M = {}
+
+local opts = {
 		indent = {
 			char = "▏", -- Very subtle thin line
 			tab_char = "▏",
@@ -29,14 +26,15 @@ return {
 				"lazyterm",
 			},
 		},
-	},
-	config = function(_, opts)
-		local ibl = require("ibl")
-		ibl.setup(opts)
-		
-		-- Add custom command to toggle indent guides
-		vim.api.nvim_create_user_command("IndentGuidesToggle", function()
-			vim.cmd("IBLToggle")
-		end, { desc = "Toggle indent guides on/off" })
-	end,
 }
+
+function M.setup()
+	local ibl = require("ibl")
+	ibl.setup(opts)
+
+	vim.api.nvim_create_user_command("IndentGuidesToggle", function()
+		vim.cmd("IBLToggle")
+	end, { desc = "Toggle indent guides on/off" })
+end
+
+return M

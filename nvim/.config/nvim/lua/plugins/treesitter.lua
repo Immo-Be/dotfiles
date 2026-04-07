@@ -1,19 +1,7 @@
-local M = {
-	{
-		"nvim-treesitter/nvim-treesitter",
-		desc = "Treesitter configurations and abstraction layer",
-		dependencies = {
-			"windwp/nvim-ts-autotag", -- Auto-close tags for HTML, JSX, TSX, Svelte
-			"HiPhish/rainbow-delimiters.nvim", -- Colored matching brackets
-			"nvim-treesitter/nvim-treesitter-textobjects", -- Advanced text objects
-			"nvim-treesitter/nvim-treesitter-context", -- Sticky scroll for function/class headers
-		},
+local M = {}
 
-		build = function()
-			require("nvim-treesitter.install").update({ with_sync = true })()
-		end,
-		config = function()
-			require("nvim-treesitter.configs").setup({
+function M.setup()
+	require("nvim-treesitter.configs").setup({
 				ensure_installed = {
 					"markdown",
 					"markdown_inline",
@@ -103,55 +91,51 @@ local M = {
 						},
 					},
 				},
-			})
+	})
 
-			vim.keymap.set("x", "+", "<CR>", { remap = true, desc = "Expand selection (alias for Enter)" })
+	vim.keymap.set("x", "+", "<CR>", { remap = true, desc = "Expand selection (alias for Enter)" })
 
-			-- Enable Sticky Scroll
-			require("treesitter-context").setup({
-				enable = true, -- Enable sticky scroll
-				throttle = true, -- Improve performance
-				max_lines = 2, -- Maximum lines to show
-				patterns = { -- Define which elements should be sticky
-					default = {
-						"class",
-						"function",
-						"method",
-					},
-				},
-			})
+	require("treesitter-context").setup({
+		enable = true,
+		throttle = true,
+		max_lines = 2,
+		patterns = {
+			default = {
+				"class",
+				"function",
+				"method",
+			},
+		},
+	})
 
-			vim.keymap.set("n", "[f", function()
-				require("treesitter-context").go_to_context()
-			end, { desc = "Jump to sticky function" })
+	vim.keymap.set("n", "[f", function()
+		require("treesitter-context").go_to_context()
+	end, { desc = "Jump to sticky function" })
 
-			-- Rainbow delimiters configuration (modern API)
-			local rainbow_delimiters = require("rainbow-delimiters")
-			require("rainbow-delimiters.setup").setup({
-				strategy = {
-					[""] = rainbow_delimiters.strategy["global"], -- Global strategy for all filetypes
-					vim = rainbow_delimiters.strategy["local"], -- Better for vim files
-				},
-				query = {
-					[""] = "rainbow-delimiters", -- Use default query for all filetypes
-					lua = "rainbow-blocks", -- Use blocks query for Lua (functions, tables)
-				},
-				priority = {
-					[""] = 110,
-					lua = 210,
-				},
-				highlight = {
-					"RainbowDelimiterRed",
-					"RainbowDelimiterYellow",
-					"RainbowDelimiterBlue",
-					"RainbowDelimiterOrange",
-					"RainbowDelimiterGreen",
-					"RainbowDelimiterViolet",
-					"RainbowDelimiterCyan",
-				},
-			})
-		end,
-	},
-}
+	local rainbow_delimiters = require("rainbow-delimiters")
+	require("rainbow-delimiters.setup").setup({
+		strategy = {
+			[""] = rainbow_delimiters.strategy["global"],
+			vim = rainbow_delimiters.strategy["local"],
+		},
+		query = {
+			[""] = "rainbow-delimiters",
+			lua = "rainbow-blocks",
+		},
+		priority = {
+			[""] = 110,
+			lua = 210,
+		},
+		highlight = {
+			"RainbowDelimiterRed",
+			"RainbowDelimiterYellow",
+			"RainbowDelimiterBlue",
+			"RainbowDelimiterOrange",
+			"RainbowDelimiterGreen",
+			"RainbowDelimiterViolet",
+			"RainbowDelimiterCyan",
+		},
+	})
+end
 
 return M

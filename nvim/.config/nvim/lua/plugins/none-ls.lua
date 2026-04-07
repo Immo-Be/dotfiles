@@ -1,9 +1,7 @@
-return {
-	"nvimtools/none-ls.nvim",
-	desc = "Formatting and linting via LSP",
-	dependencies = { "nvimtools/none-ls-extras.nvim" },
-	config = function()
-		local null_ls = require("null-ls")
+local M = {}
+
+function M.setup()
+	local null_ls = require("null-ls")
 
 		-- Make prettierd prefer the project's local prettier + plugins
 		local prettierd = null_ls.builtins.formatting.prettierd.with({
@@ -36,7 +34,7 @@ return {
 			-- env = { PRETTIERD_LOCAL_PRETTIER_ONLY = "1" },
 		})
 
-		null_ls.setup({
+	null_ls.setup({
 			sources = {
 				-- Lua formatting
 				null_ls.builtins.formatting.stylua,
@@ -89,32 +87,16 @@ return {
 				"prettier.config.mjs",
 				"prettier.config.ts"
 			),
+	})
+
+	vim.keymap.set("n", "<leader><leader>f", function()
+		vim.lsp.buf.format({
+			filter = function(client)
+				return client.name == "null-ls"
+			end,
+			timeout_ms = 3000,
 		})
+	end, { desc = "Format with null-ls" })
+end
 
-		-- Manual format with none-ls only (unchanged)
-		vim.keymap.set("n", "<leader><leader>f", function()
-			vim.lsp.buf.format({
-				filter = function(client)
-					return client.name == "null-ls"
-				end,
-				timeout_ms = 3000,
-			})
-		end, { desc = "Format with null-ls" })
-
-		-- Format-on-save is disabled by user preference
-		-- To re-enable, uncomment and adjust the autocmd below:
-		-- local fmt_group = vim.api.nvim_create_augroup("FormatOnSaveNoneLS", { clear = true })
-		-- vim.api.nvim_create_autocmd("BufWritePre", {
-		--   group = fmt_group,
-		--   pattern = { "*.html", "*.gohtml", "*.gotmpl", "*.tmpl", "*.md", "*.mdx",
-		--               "*.css", "*.scss", "*.json", "*.yml", "*.yaml", "*.js", "*.jsx",
-		--               "*.ts", "*.tsx", "*.astro", "*.lua" },
-		--   callback = function()
-		--     vim.lsp.buf.format({
-		--       filter = function(client) return client.name == "null-ls" end,
-		--       timeout_ms = 3000,
-		--     })
-		--   end,
-		-- })
-	end,
-}
+return M

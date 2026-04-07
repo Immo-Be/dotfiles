@@ -1,8 +1,7 @@
-return {
-	"WhoIsSethDaniel/mason-tool-installer.nvim",
-	dependencies = { "williamboman/mason.nvim" },
-	config = function()
-		require("mason-tool-installer").setup({
+local M = {}
+
+function M.setup()
+	require("mason-tool-installer").setup({
 			ensure_installed = {
 				-- Formatters (used by none-ls and conform.nvim)
 				"stylua", -- Lua formatter (none-ls)
@@ -18,6 +17,7 @@ return {
 			},
 			auto_update = false,
 			run_on_start = true,
-		})
-	end,
-}
+})
+end
+
+return M

@@ -1,18 +1,6 @@
--- nvim-bqf: Better quickfix window
--- https://github.com/kevinhwang91/nvim-bqf
-return {
-	"kevinhwang91/nvim-bqf",
-	ft = "qf",
-	dependencies = {
-		{
-			"junegunn/fzf",
-			run = function()
-				vim.fn["fzf#install"]()
-			end,
-		},
-		{ "nvim-treesitter/nvim-treesitter", run = ":TSUpdate" },
-	},
-	opts = {
+local M = {}
+
+local opts = {
 		-- auto_enable = true,
 		-- auto_resize_height = true, -- recommended
 		-- preview = {
@@ -34,8 +22,10 @@ return {
 		--         extra_opts = { "--bind", "ctrl-o:toggle-all", "--prompt", "> " },
 		--     },
 		-- },
-	},
-	config = function(_, opts)
-		require("bqf").setup(opts)
-	end,
 }
+
+function M.setup()
+	require("bqf").setup(opts)
+end
+
+return M

@@ -1,5 +1,5 @@
 -- Make sure to setup `mapleader` and `maplocalleader` before
--- loading lazy.nvim so that mappings are correct.
+-- loading plugins so that mappings are correct.
 -- This is also a good place to setup other settings (vim.opt)
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
@@ -149,7 +149,10 @@ vim.keymap.set("v", "P", '"+P', { noremap = true })
 -- Note: You can still access Neovim's unnamed register with ""p if needed
 
 -- undotree toggle
-vim.keymap.set("n", "<leader><F5>", vim.cmd.UndotreeToggle)
+vim.keymap.set("n", "<leader><F5>", function()
+	vim.cmd.packadd("nvim.undotree")
+	vim.cmd.Undotree()
+end, { desc = "Toggle Undotree" })
 
 -- Git related keymaps
 vim.keymap.set("n", "<leader>hm", function()
