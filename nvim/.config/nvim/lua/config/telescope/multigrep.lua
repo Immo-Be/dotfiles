@@ -98,6 +98,7 @@ local live_multigrep = function(opts)
 			debounce = 100,
 			prompt_title = "Multi Grep",
 			finder = finder,
+			default_text = opts.default_text or "",
 			previewer = conf.grep_previewer(opts),
 			sorter = require("telescope.sorters").empty(),
 			attach_mappings = function(_, map)
@@ -114,7 +115,9 @@ local live_multigrep = function(opts)
 end
 
 M.setup = function()
-	vim.keymap.set("n", "<leader>g", live_multigrep)
+	vim.keymap.set("n", "<leader>g", function()
+		live_multigrep({ default_text = vim.fn.expand("<cword>") })
+	end)
 end
 
 return M
