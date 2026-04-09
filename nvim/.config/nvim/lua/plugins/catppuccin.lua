@@ -5,9 +5,10 @@ function M.setup()
 		flavour = "frappe",
 		color_overrides = {
 			frappe = {
-				base = "#272C36",
-				mantle = "#272c36",
-				crust = "#20252e",
+				-- base = "#272C36",
+				-- mantle = "#272c36",
+				-- crust = "#20252e",
+
 			},
 		},
 		custom_highlights = function(colors)
@@ -15,8 +16,8 @@ function M.setup()
 				Normal = { bg = colors.base },
 				NormalFloat = { bg = colors.base },
 				StatusLine = { bg = colors.base },
-				IblIndent = { fg = "#2a2a37" },
-				IblScope = { fg = "#3e4451" },
+				-- IblIndent = { fg = "#2a2a37" },
+				-- IblScope = { fg = "#3e4451" },
 			}
 		end,
 		integrations = {
