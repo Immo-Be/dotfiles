@@ -7,7 +7,6 @@ This repository contains configuration files for tools like `nvim`, `tmux`, `zsh
 ## 📦 Structure
 
 Each directory corresponds to a tool or app and contains its config files in the correct relative path.
-
 Example:
 
 ```
@@ -66,6 +65,27 @@ stow --target=$HOME zsh
 
 ```sh
 stow -D --target=$HOME nvim
+```
+
+---
+
+## ➕ Add a New Config
+
+1. Create a directory in the repo that mirrors the target path under `$HOME`.
+2. Put the config file at the correct relative location inside that directory.
+3. Run `stow --target=$HOME <dir>` from the repo root.
+
+Example for Ghostty:
+
+```text
+ghostty/
+└── .config/
+    └── ghostty/
+        └── config
+```
+
+```sh
+stow --target=$HOME ghostty
 ```
 
 ---

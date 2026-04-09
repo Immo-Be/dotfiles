@@ -1,0 +1,39 @@
+# Ghostty configuration managed by GNU Stow.
+
+# Font rendering
+font-family = JetBrains Mono
+font-size = 13
+font-feature = -calt, -liga, -dlig
+
+# Cursor and shell
+cursor-style = bar
+cursor-style-blink = false
+shell-integration = detect
+shell-integration-features = no-cursor
+
+# Terminal behavior
+selection-clear-on-typing = true
+scroll-to-bottom = keystroke
+scrollback-limit = 100000
+mouse-shift-capture = never
+mouse-hide-while-typing = true
+
+# Visuals
+theme = Catppuccin Frappe
+# background = #FF0000
+# foreground = #FF0
+# background = #212121
+# background-opacity = 0.95
+background-blur = true
+macos-titlebar-style = hidden
+macos-titlebar-proxy-icon = hidden
+background-opacity-cells = true
+
+# Compatibility
+# term = xterm-256color
+
+# Keybinds
+keybind = cmd+shift+r=reset
+keybind = cmd+plus=increase_font_size:1
+keybind = cmd+minus=decrease_font_size:1
+keybind = cmd+0=reset_font_size
