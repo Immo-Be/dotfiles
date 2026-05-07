@@ -10,7 +10,7 @@ local function capitalize(text)
 end
 
 ls.add_snippets("typescriptreact", {
-	s("uss", {
+	s("useState", {
 		t("const ["),
 		i(1, "state"),
 		t(", set"),
@@ -26,7 +26,7 @@ ls.add_snippets("typescriptreact", {
 })
 
 ls.add_snippets("javascriptreact", {
-	s("uss", {
+	s("useState", {
 		t("const ["),
 		i(1, "state"),
 		t(", set"),

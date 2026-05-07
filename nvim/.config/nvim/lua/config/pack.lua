@@ -123,6 +123,7 @@ local pack_specs = {
 	gh("sindrets/diffview.nvim"),
 	gh("NeogitOrg/neogit"),
 	gh("lewis6991/gitsigns.nvim"),
+	gh("mbbill/undotree"),
 	gh("NickvanDyke/opencode.nvim"),
 	gh("nvim-lualine/lualine.nvim"),
 	gh("folke/which-key.nvim"),

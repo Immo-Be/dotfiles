@@ -2,10 +2,37 @@ local M = {}
 
 function M.setup()
 	require("neo-tree").setup({
+		commands = {
+			open_in_finder = function(state)
+				local node = state.tree:get_node()
+				if not node then
+					return
+				end
+
+				vim.fn.jobstart({ "open", "-R", node:get_id() }, { detach = true })
+			end,
+			copy_path = function(state)
+				local node = state.tree:get_node()
+				if not node then
+					return
+				end
+
+				local path = node:get_id()
+				vim.fn.setreg("+", path)
+				vim.fn.setreg("*", path)
+				vim.notify("Copied path: " .. path)
+			end,
+		},
 		filesystem = {
 			follow_current_file = { enabled = true },
 			hijack_netrw = true,
 			use_libuv_file_watcher = true,
+			window = {
+				mappings = {
+					["O"] = "open_in_finder",
+					["Y"] = "copy_path",
+				},
+			},
 			filtered_items = {
 				visible = true,
 				hide_dotfiles = false,

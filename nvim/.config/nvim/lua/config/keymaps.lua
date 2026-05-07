@@ -150,7 +150,7 @@ vim.keymap.set("v", "P", '"+P', { noremap = true })
 
 -- undotree toggle
 vim.keymap.set("n", "<leader><F5>", function()
-	vim.cmd.packadd("nvim.undotree")
+	vim.cmd.packadd("undotree")
 	vim.cmd.Undotree()
 end, { desc = "Toggle Undotree" })
 

@@ -4,7 +4,11 @@
     "body": [
       "import styles from \"./${TM_FILENAME_BASE}.module.css\"",
       "",
-      "export default function ${1:${TM_FILENAME_BASE}}() {",
+      "type Props = {",
+      "  className?: string;",
+      "};",
+      "",
+      "export default function ${1:${TM_FILENAME_BASE}}({ className }: Props) {",
       "  return (",
       "    <div>",
       "      $0",
@@ -14,14 +18,14 @@
     ],
     "description": "React Functional Component"
   },
-  "useState": {
-    "prefix": "useState",
-    "body": ["const [${1:state}, set${1/^(.)/\\U$1/}] = useState<${2:type}>(${3:initialValue})"],
-    "description": "React useState hook"
+  "Styles Import": {
+    "prefix": "styles",
+    "body": ["import styles from \"./${TM_FILENAME_BASE}.module.css\""],
+    "description": "Import CSS module for current file"
   },
   "useEffect": {
     "prefix": "useEffect",
-    "body": ["useEffect(() => {", "  $0", "}, [${1:dependencies}])"],
+    "body": ["useEffect(() => {", "  $0", "", "  return () => {", "    // cleanup", "  }", "}, [${1:dependencies}])"],
     "description": "React useEffect hook"
   },
   "useContext": {
@@ -46,7 +50,7 @@
   },
   "useRef": {
     "prefix": "useRef",
-    "body": ["const ${1:ref} = useRef<${2:type}>(${3:initialValue})"],
+    "body": ["const ${1:ref} = useRef<${2:HTMLDivElement | null}>(${3:null})"],
     "description": "React useRef hook"
   },
   "useImperativeHandle": {

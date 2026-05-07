@@ -14,14 +14,14 @@
     ],
     "description": "React Functional Component"
   },
-  "useState": {
-    "prefix": "useState",
-    "body": ["const [${1:state}, set${1/^(.)/\\U$1/}] = useState(${2:initialValue})"],
-    "description": "React useState hook"
+  "Styles Import": {
+    "prefix": "styles",
+    "body": ["import styles from \"./${TM_FILENAME_BASE}.module.css\""],
+    "description": "Import CSS module for current file"
   },
   "useEffect": {
     "prefix": "useEffect",
-    "body": ["useEffect(() => {", "  $0", "}, [${1:dependencies}])"],
+    "body": ["useEffect(() => {", "  $0", "", "  return () => {", "    // cleanup", "  }", "}, [${1:dependencies}])"],
     "description": "React useEffect hook"
   },
   "useContext": {

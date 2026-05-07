@@ -19,7 +19,7 @@
 	<key>AiMaxTokens</key>
 	<integer>400000</integer>
 	<key>AiModel</key>
-	<string>gpt-5.1</string>
+	<string>gpt-5.2</string>
 	<key>AiResponseMaxTokens</key>
 	<integer>128000</integer>
 	<key>AitermURL</key>
@@ -2451,13 +2451,13 @@
 				<key>Alpha Component</key>
 				<real>1</real>
 				<key>Blue Component</key>
-				<real>0.21176470588235294</real>
+				<real>0.15294118225574493</real>
 				<key>Color Space</key>
 				<string>P3</string>
 				<key>Green Component</key>
-				<real>0.17254901960784313</real>
+				<real>0.2084672553560783</real>
 				<key>Red Component</key>
-				<real>0.15294117647058825</real>
+				<real>0.21176470816135406</real>
 			</dict>
 			<key>Background Color (Light)</key>
 			<dict>
@@ -2660,15 +2660,15 @@
 			<key>Cursor Text Color (Dark)</key>
 			<dict>
 				<key>Alpha Component</key>
-				<integer>1</integer>
+				<real>1</real>
 				<key>Blue Component</key>
-				<real>0.27450980392156865</real>
+				<real>0.19050505757331851</real>
 				<key>Color Space</key>
-				<string>sRGB</string>
+				<string>P3</string>
 				<key>Green Component</key>
-				<real>0.20392156862745098</real>
+				<real>0.22869807052109198</real>
 				<key>Red Component</key>
-				<real>0.18823529411764706</real>
+				<real>0.26869210600852966</real>
 			</dict>
 			<key>Cursor Text Color (Light)</key>
 			<dict>

@@ -1,5 +1,6 @@
 #Skurrilum v1.0.1
 
+- [x] https://skurrilum.de/imprint/ -> https://skurrilum.de/impressum/
 - [ ] deactivate page scroll on mobile when nav is open
 - [ ] add ssh
 - [ ] fingerprint all resources
@@ -11,8 +12,7 @@ Fixes:
 - [x] navbar not visible on smaller screens
 - [ ] robots.txt (for staging)
 - [x] sitemap
-- [ ] scroll issues for the room carrousel
-- [x] barrierefreitheitserklaerung du vs sie
+- [ ] scroll issues for the room carrousel [x] barrierefreitheitserklaerung du vs sie
 - [x] footer items should stack properly
 - [x] fix: testimonials.min.d08…037a7febf6fc9c.js:1 Uncaught TypeError: Cannot read properties of null (reading 'children')
       at HTMLDocument.<anonymous> (testimonials.min.d08…7febf6fc9c.js:1:123)
