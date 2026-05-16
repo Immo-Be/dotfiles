@@ -38,3 +38,14 @@ ls.add_snippets("javascriptreact", {
 		t(")"),
 	}),
 })
+
+for _, ft in ipairs({ "css", "scss", "sass", "less" }) do
+	ls.add_snippets(ft, {
+		s("abs", {
+			t("position: absolute;"),
+			t({ "", "top: 50%;" }),
+			t({ "", "left: 50%;" }),
+			t({ "", "transform: translate(-50%, -50%);" }),
+		}),
+	})
+end
