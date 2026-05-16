@@ -4,6 +4,31 @@ function M.setup()
 	vim.g.opencode_opts = {}
 	vim.opt.autoread = true
 
+	local opencode_group = vim.api.nvim_create_augroup("OpencodeReload", { clear = true })
+	local reloaded_files = {}
+
+	vim.api.nvim_create_autocmd("FileChangedShellPost", {
+		group = opencode_group,
+		callback = function(args)
+			table.insert(reloaded_files, args.file)
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("User", {
+		group = opencode_group,
+		pattern = "OpencodeEvent:session.idle",
+		callback = function()
+			vim.tbl_clear(reloaded_files)
+			vim.cmd("silent! checktime")
+			if #reloaded_files > 0 then
+				vim.notify(
+					string.format("OpenCode finished. Refreshed %d changed buffer(s).", #reloaded_files),
+					vim.log.levels.INFO
+				)
+			end
+		end,
+	})
+
 	vim.keymap.set({ "n", "x" }, "<leader>oe", function()
 		local explain = require("opencode.config").opts.prompts.explain
 		require("opencode").prompt(explain.prompt, explain)
