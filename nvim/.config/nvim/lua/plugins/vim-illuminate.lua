@@ -1,6 +1,8 @@
 local M = {}
 
 function M.setup()
+	local vault_path = vim.fs.normalize("/Users/immo/Documents/notes_vault")
+
 	require("illuminate").configure({
 		-- Providers: priority order for getting references
 		providers = {
@@ -26,10 +28,22 @@ function M.setup()
 			"qf", -- quickfix
 			"help",
 			"man",
-			"markdown", -- Disable for markdown (too noisy)
 			"text",
 			"TelescopePrompt",
 		},
+		should_enable = function(bufnr)
+			local name = vim.api.nvim_buf_get_name(bufnr)
+			if name == "" then
+				return true
+			end
+
+			local filetype = vim.bo[bufnr].filetype
+			if filetype ~= "markdown" then
+				return true
+			end
+
+			return not vim.startswith(vim.fs.normalize(name), vault_path)
+		end,
 		-- Don't highlight in very large files (performance)
 		large_file_cutoff = 2000,
 		-- Increase performance by only highlighting visible lines
