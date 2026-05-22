@@ -12,7 +12,6 @@ function M.setup()
 			-- Linters (used by none-ls-extras and nvim-lint)
 			"eslint_d", -- Fast ESLint (none-ls-extras)
 			"shellcheck", -- Shell script linter (nvim-lint)
-			"markdownlint", -- Markdown linter (nvim-lint)
 			"yamllint", -- YAML linter (none-ls-extras)
 		},
 		auto_update = false,
