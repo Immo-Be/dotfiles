@@ -136,9 +136,6 @@ alias ll="ls -lah"
 
 
 
-yad() {
-  yazi "${1:-$PWD}" "$HOME/Downloads"
-}
 # alias ls="eza -F --group --icons"
 # alias ll="eza -lah --group --icons"
 
