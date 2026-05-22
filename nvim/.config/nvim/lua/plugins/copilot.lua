@@ -38,6 +38,17 @@ local avante_opts = {
 }
 
 function M.setup()
+	local vault_path = vim.fs.normalize("/Users/immo/Documents/notes_vault")
+
+	local function is_vault_buffer(bufnr)
+		local name = vim.api.nvim_buf_get_name(bufnr)
+		if name == "" then
+			return false
+		end
+
+		return vim.startswith(vim.fs.normalize(name), vault_path)
+	end
+
 	require("snacks").setup({
 		input = {},
 		picker = {},
@@ -54,6 +65,9 @@ function M.setup()
 
 	require("render-markdown").setup({
 		file_types = { "markdown", "Avante" },
+		ignore = function(bufnr)
+			return is_vault_buffer(bufnr) and vim.bo[bufnr].filetype == "markdown"
+		end,
 	})
 
 	require("avante").setup(avante_opts)
