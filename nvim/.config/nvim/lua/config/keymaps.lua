@@ -56,6 +56,7 @@ end, { desc = "Previous error (centered with float)" })
 
 vim.keymap.set("n", "]t", ":tabnext<CR>", { desc = "Next tab", noremap = true, silent = true })
 vim.keymap.set("n", "[t", ":tabprevious<CR>", { desc = "Previous tab", noremap = true, silent = true })
+vim.keymap.set("n", "<leader>tn", ":tabnew<CR>", { desc = "New tab", noremap = true, silent = true })
 vim.keymap.set("n", "<leader>tx", ":tabclose<CR>", { desc = "Close tab", noremap = true, silent = true })
 
 vim.keymap.set("n", "]b", ":bnext<CR>", { desc = "Next buffer", noremap = true, silent = true })
@@ -81,6 +82,31 @@ vim.keymap.set("n", "<leader>se", function()
 		prefix = "● ", -- Adds a bullet point for style
 	})
 end, { desc = "Show diagnostics for current line" })
+
+vim.keymap.set("n", "<leader>cd", function()
+	local bufnr = vim.api.nvim_get_current_buf()
+	local line = vim.api.nvim_win_get_cursor(0)[1] - 1
+	local file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":~:.")
+	if file == "" then
+		file = "[No Name]"
+	end
+
+	local diagnostics = vim.diagnostic.get(bufnr, { lnum = line })
+	if vim.tbl_isempty(diagnostics) then
+		vim.notify("No diagnostics on current line", vim.log.levels.INFO)
+		return
+	end
+
+	local lines = { string.format("%s:%d", file, line + 1) }
+	for _, diagnostic in ipairs(diagnostics) do
+		local col = diagnostic.col + 1
+		local severity = vim.diagnostic.severity[diagnostic.severity] or "INFO"
+		table.insert(lines, string.format("%d:%d %s %s", line + 1, col, severity, diagnostic.message))
+	end
+
+	vim.fn.setreg("+", table.concat(lines, "\n"))
+	vim.notify(string.format("Copied %d diagnostic(s) from current line", #diagnostics), vim.log.levels.INFO)
+end, { desc = "Copy current line diagnostics to clipboard" })
 
 -- Mini.files explorer (e for explorer)
 vim.keymap.set("n", "<leader>e", function()
