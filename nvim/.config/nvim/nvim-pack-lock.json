@@ -92,6 +92,10 @@
       "rev": "b03fb0f20bc1d43daf558cda981a2be22e73ac42",
       "src": "https://github.com/williamboman/mason.nvim"
     },
+    "maximize.nvim": {
+      "rev": "d688b66344b03ee6e5a32a0a40af85d174490af8",
+      "src": "https://github.com/declancm/maximize.nvim"
+    },
     "mini.comment": {
       "rev": "8e5ff3ed3cc0e8f216617aae01020c00c20f7a87",
       "src": "https://github.com/echasnovski/mini.comment"
@@ -176,6 +180,11 @@
     "nvim-web-devicons": {
       "rev": "95b7a002d5dba1a42eb58f5fac5c565a485eefd0",
       "src": "https://github.com/nvim-tree/nvim-web-devicons"
+    },
+    "obsidian.nvim": {
+      "rev": "ed6f386abe83e4dafa9afecf50cd9d9fff072a07",
+      "src": "https://github.com/obsidian-nvim/obsidian.nvim",
+      "version": "'v3.16.3'"
     },
     "oil.nvim": {
       "rev": "0fcc83805ad11cf714a949c98c605ed717e0b83e",
