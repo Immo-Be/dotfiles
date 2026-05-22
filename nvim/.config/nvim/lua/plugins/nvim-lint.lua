@@ -8,7 +8,6 @@ function M.setup()
 		sh = { "shellcheck" },
 		bash = { "shellcheck" },
 		zsh = { "shellcheck" },
-		markdown = { "markdownlint" },
 	}
 
 	local lint_augroup = vim.api.nvim_create_augroup("lint", { clear = true })
