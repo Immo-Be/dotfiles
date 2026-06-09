@@ -7,6 +7,57 @@ vim.g.maplocalleader = "\\"
 vim.keymap.set("n", "K", "5k", { noremap = true }) -- Move up 5 lines
 vim.keymap.set("n", "J", "5j", { noremap = true }) -- Down up 5 lines
 
+local function treesitter_select(target)
+	return function()
+		local select = require("vim.treesitter._select")
+		if target == "parent" then
+			select.select_parent(vim.v.count1)
+		else
+			select.select_child(vim.v.count1)
+		end
+	end
+end
+
+local function set_treesitter_select_keymaps(bufnr)
+	if vim.b[bufnr].treesitter_select_keymaps then
+		return
+	end
+
+	if vim.bo[bufnr].buftype ~= "" or not vim.bo[bufnr].buflisted then
+		return
+	end
+
+	local filetype = vim.bo[bufnr].filetype
+	if filetype == "" or not vim.treesitter.language.get_lang(filetype) then
+		return
+	end
+
+	vim.b[bufnr].treesitter_select_keymaps = true
+	local opts = { buffer = bufnr }
+
+	vim.keymap.set({ "n", "x" }, "<CR>", treesitter_select("parent"), vim.tbl_extend("force", opts, {
+		desc = "Treesitter incremental selection",
+	}))
+	vim.keymap.set({ "n", "x" }, "<S-CR>", treesitter_select("child"), vim.tbl_extend("force", opts, {
+		desc = "Treesitter incremental deselection",
+	}))
+	vim.keymap.set({ "n", "x" }, "<S-Enter>", treesitter_select("child"), vim.tbl_extend("force", opts, {
+		desc = "Treesitter incremental deselection",
+	}))
+end
+
+local treesitter_select_group = vim.api.nvim_create_augroup("TreesitterSelectKeymaps", { clear = true })
+vim.api.nvim_create_autocmd({ "BufWinEnter", "FileType" }, {
+	group = treesitter_select_group,
+	callback = function(args)
+		set_treesitter_select_keymaps(args.buf)
+	end,
+})
+
+for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+	set_treesitter_select_keymaps(bufnr)
+end
+
 -- Telescope bidings for LSP: Go to definition, references, document symbols, workspace symbols
 vim.keymap.set("n", "<leader>ds", ":Telescope lsp_document_symbols<CR>", { noremap = true, silent = true })
 vim.keymap.set("n", "<leader>ws", ":Telescope lsp_workspace_symbols<CR>", { noremap = true, silent = true })
