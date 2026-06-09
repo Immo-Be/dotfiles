@@ -78,8 +78,14 @@ end
 
 M.setup = function()
 	vim.keymap.set("n", "<leader>g", function()
-		live_multigrep({ default_text = vim.fn.expand("<cword>") })
-	end)
+		live_multigrep()
+	end, { desc = "Multi grep" })
+
+	vim.keymap.set("x", "<leader>g", function()
+		vim.cmd('noau normal! "vy')
+		local selected_text = vim.fn.getreg("v"):gsub("\n", " ")
+		live_multigrep({ default_text = selected_text })
+	end, { desc = "Multi grep selected text" })
 end
 
 return M
