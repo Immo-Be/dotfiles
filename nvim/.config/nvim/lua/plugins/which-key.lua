@@ -38,6 +38,7 @@ function M.setup()
 		{ "<leader>E", desc = "Open explorer at cwd" },
 		{ "<leader>f", group = "Find" },
 		{ "<leader>h", group = "Git (Hunk)" },
+		{ "<leader>H", group = "GitHub (Octo)" },
 		{ "<leader>s", group = "Swap/Signature" },
 		{ "<leader>t", group = "Tab/Toggle" },
 		{ "<leader>w", group = "Workspace" },
