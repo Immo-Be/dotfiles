@@ -30,6 +30,11 @@ vim.opt.splitbelow = true
 -- Save undo history
 vim.opt.undofile = true
 
+-- swap files have been a constant annoyance without ever truly helping ?!
+-- i hope i won't regret this
+-- Disable swap files safely
+vim.opt.swapfile = false
+
 -- Enable spell checking
 vim.opt.spell = true
 -- vim.opt.spelllang = { "en_us", "de_de" }
