@@ -1021,6 +1021,86 @@ local function open_pr_diffview()
 	vim.cmd("DiffviewOpen " .. vim.fn.fnameescape(base) .. "..." .. vim.fn.fnameescape(head))
 end
 
+local function open_url(url)
+	if vim.ui.open then
+		vim.ui.open(url)
+		return
+	end
+
+	vim.fn["netrw#BrowseX"](url, 0)
+end
+
+local function current_line_url()
+	local line = vim.api.nvim_get_current_line()
+	local cursor_col = vim.api.nvim_win_get_cursor(0)[2] + 1
+	local candidates = {}
+
+	local from = 1
+	while from <= #line do
+		local start_col, end_col, label, url, after = line:find("%[([^%]]+)%]%((https?://[^%)%s]+)%)()", from)
+		if not start_col then
+			break
+		end
+
+		if start_col == 1 or line:sub(start_col - 1, start_col - 1) ~= "!" then
+			table.insert(candidates, {
+				url = url,
+				start_col = start_col,
+				end_col = end_col,
+				label_end_col = start_col + #label - 1,
+			})
+		end
+		from = after
+	end
+
+	from = 1
+	while from <= #line do
+		local start_col, end_col, raw_url, after = line:find("(https?://[%w%-%._~:/%?#%[%]@!%$&'%(%)%*%+,;=%%]+)()", from)
+		if not start_col then
+			break
+		end
+
+		local url = raw_url:gsub("[%)%].,;:]+$", "")
+		table.insert(candidates, {
+			url = url,
+			start_col = start_col,
+			end_col = math.min(end_col, start_col + #url - 1),
+			label_end_col = start_col + #url - 1,
+		})
+		from = after
+	end
+
+	if #candidates == 0 then
+		return nil
+	end
+
+	table.sort(candidates, function(a, b)
+		local function score(candidate)
+			if cursor_col >= candidate.start_col and cursor_col <= candidate.label_end_col then
+				return 0
+			end
+			if cursor_col >= candidate.start_col and cursor_col <= candidate.end_col then
+				return 1
+			end
+			return math.abs(cursor_col - candidate.start_col) + 2
+		end
+
+		return score(a) < score(b)
+	end)
+
+	return candidates[1].url
+end
+
+local function open_current_octo_url()
+	local url = current_line_url()
+	if not url then
+		vim.notify("No URL found on current line", vim.log.levels.WARN)
+		return
+	end
+
+	open_url(url)
+end
+
 function M.setup()
 	setup_highlights()
 
@@ -1089,6 +1169,18 @@ function M.setup()
 	vim.keymap.set("n", "<leader>Hs", function()
 		require("octo.utils").create_base_search_command({ include_current_repo = true })
 	end, { desc = "Octo search current repo", silent = true })
+
+	vim.api.nvim_create_autocmd("FileType", {
+		group = vim.api.nvim_create_augroup("OctoOpenUrl", { clear = true }),
+		pattern = "octo",
+		callback = function(event)
+			vim.keymap.set("n", "gx", open_current_octo_url, {
+				buffer = event.buf,
+				desc = "Open Octo markdown URL",
+				silent = true,
+			})
+		end,
+	})
 end
 
 return M
