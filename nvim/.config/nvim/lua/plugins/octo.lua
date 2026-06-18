@@ -130,8 +130,10 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#a5adce", bold = true })
 	-- Timestamps: dimmer than regular comment text
 	vim.api.nvim_set_hl(0, "OctoDate", { fg = "#737994", italic = true })
-	-- Timeline event lines (e.g. "user merged commit …"): keep subtle
-	vim.api.nvim_set_hl(0, "OctoTimelineItemHeading", { fg = "#737994" })
+	-- Timeline event lines: make review/thread boundaries easy to scan
+	vim.api.nvim_set_hl(0, "OctoTimelineItemHeading", { fg = "#e5c890", bold = true })
+	vim.api.nvim_set_hl(0, "OctoTimelineMarker", { fg = "#8caaee", bold = true })
+	vim.api.nvim_set_hl(0, "OctoFoldMarker", { fg = "#c6d0f5", bold = true })
 	-- Separator/symbol glyphs between metadata items
 	vim.api.nvim_set_hl(0, "OctoSymbol", { fg = "#626880" })
 	-- Editable regions: faint surface tint so input areas read as "writable"
@@ -146,10 +148,43 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoBadBubble", { fg = "#232634", bg = "#e78284", bold = true })
 	vim.api.nvim_set_hl(0, "OctoInfoBubble", { fg = "#232634", bg = "#8caaee", bold = true })
 	vim.api.nvim_set_hl(0, "OctoMetricBubble", { fg = "#c6d0f5", bg = "#414559" })
+	vim.api.nvim_set_hl(0, "OctoReviewLine", { bg = "#3b4058" })
+	vim.api.nvim_set_hl(0, "OctoThreadLine", { bg = "#333b4f" })
+	vim.api.nvim_set_hl(0, "OctoCommentBodyLine", { bg = "#303446" })
+	vim.api.nvim_set_hl(0, "OctoReviewBodyLine", { bg = "#34394d" })
+	vim.api.nvim_set_hl(0, "OctoReviewBodyAltLine", { bg = "#383d52" })
+	vim.api.nvim_set_hl(0, "OctoThreadBodyLine", { bg = "#373c51" })
+	vim.api.nvim_set_hl(0, "OctoThreadBodyAltLine", { bg = "#3b4056" })
+	vim.api.nvim_set_hl(0, "OctoIssueBodyLine", { bg = "#32374a" })
+	vim.api.nvim_set_hl(0, "OctoIssueBodyAltLine", { bg = "#363b50" })
+	vim.api.nvim_set_hl(0, "OctoSnippetLine", { bg = "#292c3c" })
+	vim.api.nvim_set_hl(0, "OctoSnippetBorder", { fg = "#8caaee", bg = "#292c3c" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownLink", { fg = "#8caaee", underline = true })
+	vim.api.nvim_set_hl(0, "OctoMarkdownUrl", { fg = "#838ba7", italic = true })
+	vim.api.nvim_set_hl(0, "OctoMarkdownInlineCode", { fg = "#ef9f76", bg = "#414559" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownCodeLine", { bg = "#292c3c" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownCodeBorder", { fg = "#8caaee", bg = "#292c3c" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownQuoteLine", { bg = "#33384d" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownQuoteMarker", { fg = "#e5c890", bold = true })
+	vim.api.nvim_set_hl(0, "OctoMarkdownPriority", { fg = "#232634", bg = "#e5c890", bold = true })
+	vim.api.nvim_set_hl(0, "OctoMarkdownHeading", { fg = "#babbf1", bold = true })
+	vim.api.nvim_set_hl(0, "OctoMarkdownDivider", { fg = "#51576d" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownCallout", { fg = "#232634", bg = "#e5c890", bold = true })
+	vim.api.nvim_set_hl(0, "OctoMarkdownSectionA", { bg = "#303446" })
+	vim.api.nvim_set_hl(0, "OctoMarkdownSectionB", { bg = "#34384b" })
 end
 
 local function is_present(value)
 	return value ~= nil and value ~= vim.NIL and value ~= ""
+end
+
+local function divider_text()
+	local width = math.max(vim.fn.winwidth(0) - 8, 20)
+	return string.rep("━", width)
+end
+
+local function divider_chunks()
+	return { { divider_text(), "OctoOverviewDivider" } }
 end
 
 local function add_labels(chunks, labels, bubbles)
@@ -272,6 +307,8 @@ local function more_metadata_lines(issue, is_pr, utils)
 	table.insert(lines, "")
 	table.insert(lines, "</details>")
 	table.insert(lines, "")
+	table.insert(lines, divider_text())
+	table.insert(lines, "")
 
 	return lines
 end
@@ -350,9 +387,7 @@ local function setup_compact_octo_details()
 			})
 		end
 
-		table.insert(details, {
-			{ "────────────────────────────────────────────────────────────", "OctoOverviewDivider" },
-		})
+		table.insert(details, divider_chunks())
 		table.insert(details, {})
 
 		if is_pr then
@@ -442,9 +477,7 @@ local function setup_compact_octo_details()
 		table.insert(details, labels)
 
 		table.insert(details, {})
-		table.insert(details, {
-			{ "────────────────────────────────────────────────────────────", "OctoOverviewDivider" },
-		})
+		table.insert(details, divider_chunks())
 
 		local line = 3
 		if not update then
@@ -466,6 +499,501 @@ local function setup_compact_octo_details()
 			writers.write_virtual_text(bufnr, constants.OCTO_DETAILS_VT_NS, line - 1, chunks)
 			line = line + 1
 		end
+	end
+end
+
+local function setup_timeline_visuals()
+	if vim.g.octo_timeline_visuals_wrapped then
+		return
+	end
+	vim.g.octo_timeline_visuals_wrapped = true
+
+	local writers = require("octo.ui.writers")
+	local config = require("octo.config")
+	local constants = require("octo.constants")
+	local bubbles = require("octo.ui.bubbles")
+	local utils = require("octo.utils")
+	local logins = require("octo.logins")
+	local ns = vim.api.nvim_create_namespace("octo_timeline_visuals")
+	local original_write_comment = writers.write_comment
+	local original_write_body_agnostic = writers.write_body_agnostic
+	local original_write_thread_snippet = writers.write_thread_snippet
+	local thread_headers = {}
+	local comment_headers = {}
+	local markdown_ns = vim.api.nvim_create_namespace("octo_markdown_visuals")
+
+	local function mark_line(bufnr, line, group)
+		if line and line > 0 then
+			vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+				line_hl_group = group,
+				priority = 20,
+			})
+		end
+	end
+
+	local function mark_range(bufnr, first, last, group)
+		if not first or not last then
+			return
+		end
+
+		for line = first, last do
+			mark_line(bufnr, line, group)
+		end
+	end
+
+	local function timeline_marker()
+		return "│"
+	end
+
+	local function fold_marker(line)
+		if vim.fn.foldlevel(line) == 0 then
+			return " "
+		end
+
+		return vim.fn.foldclosed(line) == -1 and "▾" or "▸"
+	end
+
+	local function chunk_width(chunks)
+		local width = 0
+		for _, chunk in ipairs(chunks) do
+			width = width + vim.fn.strdisplaywidth(chunk[1])
+		end
+		return width
+	end
+
+	local function set_line_overlay(bufnr, line, chunks, group, source_text)
+		if line and line > 0 then
+			if source_text then
+				local padding = vim.fn.strdisplaywidth(source_text) - chunk_width(chunks)
+				if padding > 0 then
+					table.insert(chunks, { string.rep(" ", padding), "Normal" })
+				end
+			end
+
+			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, 0, {
+				virt_text = chunks,
+				virt_text_pos = "overlay",
+				hl_mode = "combine",
+				line_hl_group = group,
+				priority = 70,
+			})
+		end
+	end
+
+	local function set_heading_overlay(bufnr, line, chunks, source_text, group)
+		if line and line > 0 then
+			local width = math.max(vim.fn.winwidth(0) - 8, 20)
+			if source_text then
+				local padding = vim.fn.strdisplaywidth(source_text) - chunk_width(chunks)
+				if padding > 0 then
+					table.insert(chunks, { string.rep(" ", padding), "Normal" })
+				end
+			end
+
+			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, 0, {
+				virt_lines = { { { string.rep("━", width), "OctoMarkdownDivider" } } },
+				virt_lines_above = true,
+				virt_text = chunks,
+				virt_text_pos = "overlay",
+				hl_mode = "combine",
+				line_hl_group = group,
+				priority = 75,
+			})
+		end
+	end
+
+	local function set_section_divider(bufnr, line, group)
+		if line and line > 0 then
+			local width = math.max(vim.fn.winwidth(0) - 8, 20)
+			local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
+			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, 0, {
+				virt_lines = {
+					{ { "", "Normal" } },
+					{ { string.rep("─", width), "OctoMarkdownDivider" } },
+				},
+				virt_text = { { string.rep(" ", vim.fn.strdisplaywidth(text)), "Normal" } },
+				virt_text_pos = "overlay",
+				line_hl_group = group,
+				priority = 76,
+			})
+		end
+	end
+
+	local function section_highlight(section, groups)
+		groups = groups or { "OctoMarkdownSectionA", "OctoMarkdownSectionB" }
+		return section % 2 == 0 and groups[1] or groups[2]
+	end
+
+	local function mark_section_line(bufnr, line, group)
+		if line and line > 0 then
+			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, 0, {
+				line_hl_group = group,
+				priority = 60,
+			})
+		end
+	end
+
+	local function mark_inline_code(bufnr, line, text)
+		local from = 1
+		while true do
+			local start_col, end_col = text:find("`[^`]+`", from)
+			if not start_col then
+				break
+			end
+
+			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, start_col - 1, {
+				end_col = end_col,
+				hl_group = "OctoMarkdownInlineCode",
+				priority = 90,
+			})
+			from = end_col + 1
+		end
+	end
+
+	local function priority_highlight(priority)
+		if priority == "high" or priority == "critical" then
+			return "OctoBadBubble"
+		elseif priority == "medium" then
+			return "OctoMarkdownPriority"
+		elseif priority == "low" then
+			return "OctoInfoBubble"
+		end
+
+		return "OctoMetricBubble"
+	end
+
+	local function markdown_link_chunks(text, include_url)
+		local chunks = {}
+		local from = 1
+		local changed = false
+
+		while from <= #text do
+			local start_col, end_col, label, url = text:find("%[([^%]]+)%]%(([^%)]+)%)", from)
+			if not start_col then
+				table.insert(chunks, { text:sub(from), "Normal" })
+				break
+			end
+
+			if start_col > from then
+				table.insert(chunks, { text:sub(from, start_col - 1), "Normal" })
+			end
+			table.insert(chunks, { label, "OctoMarkdownLink" })
+			if include_url then
+				table.insert(chunks, { " (" .. url:gsub("^https?://", "") .. ")", "OctoMarkdownUrl" })
+			else
+				table.insert(chunks, { " ↗", "OctoMarkdownUrl" })
+			end
+			from = end_col + 1
+			changed = true
+		end
+
+		return changed and chunks or nil
+	end
+
+	local function markdown_image_chunks(text)
+		local chunks = {}
+		local from = 1
+		local changed = false
+
+		while from <= #text do
+			local start_col, end_col, label = text:find("!%[([^%]]+)%]%([^%)]+%)", from)
+			if not start_col then
+				table.insert(chunks, { text:sub(from), "Normal" })
+				break
+			end
+
+			if start_col > from then
+				table.insert(chunks, { text:sub(from, start_col - 1), "Normal" })
+			end
+
+			table.insert(chunks, { " " .. label .. " ", priority_highlight(label:lower()) })
+			from = end_col + 1
+			changed = true
+		end
+
+		return changed and chunks or nil
+	end
+
+	local function inline_markdown_chunks(text, include_url)
+		return markdown_image_chunks(text) or markdown_link_chunks(text, include_url) or { { text, "Normal" } }
+	end
+
+	local function apply_markdown_visuals(bufnr, first, last, section_groups)
+		if not first or not last or last < first then
+			return
+		end
+
+		vim.api.nvim_buf_clear_namespace(bufnr, markdown_ns, first - 1, last)
+
+		local in_code = false
+		local section = 0
+		for line = first, last do
+			local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
+			local fence_lang = text:match("^%s*```%s*(%S*)")
+			local heading = text:match("^%s*#+%s+(.+)$")
+			local section_group = section_highlight(section, section_groups)
+			local rule_chars = text:gsub("%s", "")
+			local is_horizontal_rule = rule_chars:match("^[-*_]+$") and #rule_chars >= 3
+
+			if fence_lang then
+				in_code = not in_code
+				local label = fence_lang ~= "" and fence_lang or "code"
+				local border = in_code and "╭─ " or "╰─ "
+				set_line_overlay(bufnr, line, {
+					{ border, "OctoMarkdownCodeBorder" },
+					{ label, "OctoTimelineItemHeading" },
+				}, "OctoMarkdownCodeLine")
+			elseif in_code then
+				mark_line(bufnr, line, "OctoMarkdownCodeLine")
+			elseif is_horizontal_rule then
+				set_section_divider(bufnr, line, section_group)
+				section = section + 1
+			elseif heading then
+				mark_section_line(bufnr, line, section_group)
+				set_heading_overlay(bufnr, line, {
+					{ " " .. heading .. " ", "OctoMarkdownHeading" },
+				}, text, section_group)
+			else
+				mark_section_line(bufnr, line, section_group)
+				local image_chunks = markdown_image_chunks(text)
+				if image_chunks then
+					set_line_overlay(bufnr, line, image_chunks, section_group, text)
+				elseif text:match("^%s*>") then
+					local quote = text:gsub("^%s*>%s?", "")
+					local callout = quote:match("^%[!(%u+)%]%s*$")
+					local quote_chunks = { { "▌ ", "OctoMarkdownQuoteMarker" } }
+					if callout then
+						table.insert(quote_chunks, { " " .. callout:lower() .. " ", "OctoMarkdownCallout" })
+					else
+						vim.list_extend(quote_chunks, inline_markdown_chunks(quote, false))
+					end
+					set_line_overlay(bufnr, line, quote_chunks, section_group, text)
+					mark_inline_code(bufnr, line, text)
+				else
+					local link_chunks = markdown_link_chunks(text, false)
+					if link_chunks then
+						set_line_overlay(bufnr, line, link_chunks, section_group, text)
+					end
+					mark_inline_code(bufnr, line, text)
+				end
+			end
+		end
+	end
+
+	local function render_comment_header(bufnr, line, opts)
+		if not vim.api.nvim_buf_is_valid(bufnr) then
+			return
+		end
+
+		local comment = opts.comment
+		local kind = opts.kind
+		local author = comment.author and logins.format_author(comment.author) or { login = "unknown" }
+		local heading = "COMMENT"
+		local line_group = "OctoReviewLine"
+
+		if kind == "PullRequestReview" then
+			heading = "REVIEW"
+		elseif kind == "PullRequestReviewComment" then
+			heading = "THREAD COMMENT"
+			line_group = "OctoThreadLine"
+		elseif kind == "PullRequestComment" then
+			heading = "COMMENT"
+			line_group = "OctoThreadLine"
+		elseif kind == "IssueComment" or kind == "DiscussionComment" then
+			heading = utils.is_blank(comment.replyTo) and "COMMENT" or "REPLY"
+		end
+
+		local header_vt = {
+			{ fold_marker(line) .. " ", "OctoFoldMarker" },
+			{ timeline_marker() .. " ", "OctoTimelineMarker" },
+			{ heading .. "  ", "OctoTimelineItemHeading" },
+			{ author.login, comment.viewerDidAuthor and "OctoUserViewer" or "OctoUser" },
+			{ "  ", "OctoSymbol" },
+		}
+
+		if kind == "PullRequestReview" then
+			local state = comment.state
+			local state_label = utils.state_msg_map[state] or state
+			if state_label then
+				vim.list_extend(header_vt, bubbles.make_bubble(state_label:lower(), state_bubble_highlight(state), { right_margin_width = 1 }))
+			end
+		elseif kind == "PullRequestReviewComment" and comment.state and comment.state ~= "SUBMITTED" then
+			vim.list_extend(header_vt, bubbles.make_bubble(comment.state:lower(), state_bubble_highlight(comment.state), { right_margin_width = 1 }))
+		end
+
+		table.insert(header_vt, { utils.format_date(comment.createdAt), "OctoDate" })
+		if is_present(comment.lastEditedAt) and comment.lastEditedAt ~= comment.createdAt then
+			table.insert(header_vt, { "  edited " .. utils.format_date(comment.lastEditedAt), "OctoDate" })
+		end
+
+		vim.api.nvim_buf_clear_namespace(bufnr, ns, line - 1, line)
+		vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+			virt_text = header_vt,
+			virt_text_pos = "overlay",
+			hl_mode = "combine",
+			line_hl_group = line_group,
+			priority = 80,
+		})
+	end
+
+	local function render_thread_header(bufnr, line, opts)
+		if not vim.api.nvim_buf_is_valid(bufnr) then
+			return
+		end
+
+		local conf = config.values
+		local indent = string.rep(" ", conf.timeline_indent)
+		local header_vt = {
+			{ indent, "Normal" },
+			{ fold_marker(line) .. " ", "OctoFoldMarker" },
+			{ timeline_marker() .. " ", "OctoTimelineMarker" },
+			{ "THREAD  ", "OctoTimelineItemHeading" },
+			{ opts.path .. " ", "OctoDetailsLabel" },
+			{ tostring(opts.start_line) .. ":" .. tostring(opts.end_line), "OctoDetailsValue" },
+			{ "  commit ", "OctoOverviewMuted" },
+			{ opts.commit, "OctoDetailsLabel" },
+			{ "  ", "OctoSymbol" },
+		}
+
+		if opts.isOutdated then
+			vim.list_extend(header_vt, bubbles.make_bubble("outdated", "OctoWarnBubble", { right_margin_width = 1 }))
+		end
+
+		if opts.isResolved then
+			table.insert(header_vt, { "✓", "OctoGreen" })
+			if opts.resolvedBy then
+				vim.list_extend(header_vt, {
+					{ " resolved by ", "OctoOverviewMuted" },
+					{ opts.resolvedBy.login, "OctoUser" },
+				})
+			end
+		end
+
+		vim.api.nvim_buf_clear_namespace(bufnr, constants.OCTO_THREAD_HEADER_VT_NS, line - 1, line)
+		vim.api.nvim_buf_set_extmark(bufnr, constants.OCTO_THREAD_HEADER_VT_NS, line - 1, 0, {
+			virt_text = header_vt,
+			virt_text_pos = "overlay",
+			hl_mode = "combine",
+			line_hl_group = "OctoThreadLine",
+		})
+	end
+
+	local function update_thread_headers(bufnr)
+		for line, opts in pairs(thread_headers[bufnr] or {}) do
+			render_thread_header(bufnr, line, opts)
+		end
+		for line, opts in pairs(comment_headers[bufnr] or {}) do
+			render_comment_header(bufnr, line, opts)
+		end
+	end
+
+	local function ensure_thread_header_updates(bufnr)
+		if vim.b[bufnr].octo_thread_header_updates then
+			return
+		end
+		vim.b[bufnr].octo_thread_header_updates = true
+
+		vim.api.nvim_create_autocmd({ "BufWinEnter", "CursorMoved" }, {
+			buffer = bufnr,
+			callback = function()
+				update_thread_headers(bufnr)
+			end,
+		})
+
+		local pending = false
+		local key_ns = vim.api.nvim_create_namespace("octo_thread_header_keys_" .. bufnr)
+		vim.on_key(function()
+			if vim.api.nvim_get_current_buf() ~= bufnr or pending then
+				return
+			end
+			pending = true
+			vim.schedule(function()
+				pending = false
+				if vim.api.nvim_buf_is_valid(bufnr) then
+					update_thread_headers(bufnr)
+				end
+			end)
+		end, key_ns)
+	end
+
+	writers.write_body_agnostic = function(bufnr, body, line, viewer_can_update, last_edited_at, includes_created_edit)
+		local start_line = line or vim.api.nvim_buf_line_count(bufnr) + 1
+		original_write_body_agnostic(bufnr, body, line, viewer_can_update, last_edited_at, includes_created_edit)
+
+		body = utils.trim(body)
+		if vim.startswith(body, constants.NO_BODY_MSG) or utils.is_blank(body) then
+			body = " "
+		end
+
+		local description = body:gsub("\r\n", "\n")
+		local lines = vim.split(description, "\n", { plain = true })
+		vim.list_extend(lines, { "" })
+		apply_markdown_visuals(bufnr, start_line, start_line + #lines - 1)
+	end
+
+	writers.write_comment = function(bufnr, comment, kind, line)
+		local start_line, end_line = original_write_comment(bufnr, comment, kind, line)
+		if not start_line then
+			return start_line, end_line
+		end
+
+		if kind == "PullRequestReview" then
+			comment_headers[bufnr] = comment_headers[bufnr] or {}
+			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
+			render_comment_header(bufnr, start_line, comment_headers[bufnr][start_line])
+			mark_line(bufnr, start_line, "OctoReviewLine")
+			mark_range(bufnr, start_line + 1, end_line, "OctoReviewBodyLine")
+			apply_markdown_visuals(bufnr, start_line + 1, end_line, { "OctoReviewBodyLine", "OctoReviewBodyAltLine" })
+		elseif kind == "PullRequestReviewComment" or kind == "PullRequestComment" then
+			comment_headers[bufnr] = comment_headers[bufnr] or {}
+			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
+			render_comment_header(bufnr, start_line, comment_headers[bufnr][start_line])
+			mark_line(bufnr, start_line, "OctoThreadLine")
+			mark_range(bufnr, start_line + 1, end_line, "OctoThreadBodyLine")
+			apply_markdown_visuals(bufnr, start_line + 1, end_line, { "OctoThreadBodyLine", "OctoThreadBodyAltLine" })
+		elseif kind == "IssueComment" or kind == "DiscussionComment" then
+			comment_headers[bufnr] = comment_headers[bufnr] or {}
+			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
+			render_comment_header(bufnr, start_line, comment_headers[bufnr][start_line])
+			mark_line(bufnr, start_line, "OctoReviewLine")
+			mark_range(bufnr, start_line + 1, end_line, "OctoIssueBodyLine")
+			apply_markdown_visuals(bufnr, start_line + 1, end_line, { "OctoIssueBodyLine", "OctoIssueBodyAltLine" })
+		end
+
+		ensure_thread_header_updates(bufnr)
+		vim.schedule(function()
+			update_thread_headers(bufnr)
+		end)
+
+		return start_line, end_line
+	end
+
+	writers.write_review_thread_header = function(bufnr, opts, line)
+		local header_line = (line or vim.api.nvim_buf_line_count(bufnr) - 1) + 2
+		thread_headers[bufnr] = thread_headers[bufnr] or {}
+		thread_headers[bufnr][header_line] = opts
+
+		writers.write_block(bufnr, { "" })
+		render_thread_header(bufnr, header_line, opts)
+		mark_line(bufnr, header_line, "OctoThreadLine")
+		ensure_thread_header_updates(bufnr)
+
+		vim.schedule(function()
+			update_thread_headers(bufnr)
+		end)
+	end
+
+	writers.write_thread_snippet = function(bufnr, diffhunk, diffhunk_lang, start_line, comment_start, comment_end, comment_side)
+		local snippet_start, snippet_end =
+			original_write_thread_snippet(bufnr, diffhunk, diffhunk_lang, start_line, comment_start, comment_end, comment_side)
+
+		if snippet_start and snippet_end and snippet_end >= snippet_start then
+			mark_range(bufnr, snippet_start, snippet_end, "OctoSnippetLine")
+			mark_line(bufnr, snippet_start, "OctoSnippetBorder")
+			mark_line(bufnr, snippet_end, "OctoSnippetBorder")
+		end
+
+		return snippet_start, snippet_end
 	end
 end
 
@@ -535,6 +1063,7 @@ function M.setup()
 		-- ── Timeline ─────────────────────────────────────────────────────────
 		use_timeline_icons = true,
 		timeline_indent    = 2,
+		timeline_marker    = "│",
 
 		-- ── Changed-files panel ───────────────────────────────────────────────
 		file_panel = {
@@ -543,6 +1072,7 @@ function M.setup()
 		},
 	})
 	setup_compact_octo_details()
+	setup_timeline_visuals()
 	setup_cmp_completion()
 
 	vim.keymap.set("n", "<leader>Ha", octo("actions"), { desc = "Octo actions", silent = true })
