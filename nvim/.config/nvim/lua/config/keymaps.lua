@@ -255,7 +255,7 @@ vim.keymap.set("n", "<leader>ha", function()
 	require("utils.git").commit_with_ai()
 end, { desc = "Git commit with AI-generated message" })
 
-vim.keymap.set("n", "<leader>hp", function()
+vim.keymap.set("n", "<leader>hP", function()
 	require("utils.git").push_with_confirmation()
 end, { desc = "Git push (with confirmation)" })
 

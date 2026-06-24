@@ -1021,6 +1021,177 @@ local function open_pr_diffview()
 	vim.cmd("DiffviewOpen " .. vim.fn.fnameescape(base) .. "..." .. vim.fn.fnameescape(head))
 end
 
+local function setup_pr_options_diffview()
+	local mappings = require("octo.mappings")
+	if mappings.pr_options_with_diffview then
+		return
+	end
+
+	local original_pr_options = mappings.pr_options
+	mappings.pr_options_with_diffview = true
+
+	mappings.pr_options = function()
+		local original_select = vim.ui.select
+
+		vim.ui.select = function(items, opts, on_choice)
+			if opts and opts.prompt == "Select an option:" and vim.tbl_contains(items, "Start Review") then
+				local diffview_option = "See Diff Changes"
+				local choices = vim.list_extend({}, items)
+
+				if not vim.tbl_contains(choices, diffview_option) then
+					table.insert(choices, diffview_option)
+				end
+
+				return original_select(choices, opts, function(choice, idx)
+					if choice == diffview_option then
+						open_pr_diffview()
+						return
+					end
+
+					on_choice(choice, idx)
+				end)
+			end
+
+			return original_select(items, opts, on_choice)
+		end
+
+		local ok, err = pcall(original_pr_options)
+		vim.ui.select = original_select
+
+		if not ok then
+			error(err)
+		end
+	end
+end
+
+local function setup_prompt_delete_branch_after_merge()
+	local commands = require("octo.commands")
+	if commands.merge_pr_with_delete_prompt then
+		return
+	end
+
+	local config = require("octo.config")
+	local gh = require("octo.gh")
+	local mutations = require("octo.gh.mutations")
+	local utils = require("octo.utils")
+	local writers = require("octo.ui.writers")
+
+	commands.merge_pr_with_delete_prompt = true
+
+	local function has_param(params, expected)
+		for _, param in ipairs(params) do
+			if param == expected then
+				return true
+			end
+		end
+
+		return false
+	end
+
+	local function select_message(primary, secondary, fallback)
+		if not utils.is_blank(primary) then
+			return primary
+		end
+		if not utils.is_blank(secondary) then
+			return secondary
+		end
+
+		return fallback
+	end
+
+	local function close_pr_buffer(bufnr)
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			vim.api.nvim_buf_delete(bufnr, { force = true })
+		end
+	end
+
+	local function delete_head_branch(pr)
+		gh.api.graphql({
+			query = mutations.delete_branch,
+			F = { branchRef = pr.headRef.id },
+			opts = {
+				cb = gh.create_callback({
+					success = function()
+						utils.info("Deleted branch " .. pr.headRefName)
+					end,
+				}),
+			},
+		})
+	end
+
+	local function prompt_delete_head_branch(pr, after_choice)
+		if utils.is_blank(pr.headRef) or utils.is_blank(pr.headRef.id) then
+			utils.info("Branch is already deleted")
+			after_choice()
+			return
+		end
+
+		vim.ui.select({ "Delete branch", "Keep branch" }, {
+			prompt = "Delete branch " .. pr.headRefName .. "?",
+		}, function(choice)
+			if choice == "Delete branch" then
+				delete_head_branch(pr)
+			end
+			after_choice()
+		end)
+	end
+
+	commands.merge_pr = function(...)
+		local buffer = utils.get_current_buffer()
+		if not buffer or not buffer:isPullRequest() then
+			return
+		end
+
+		local pr = buffer:pullRequest()
+		local params = table.pack(...)
+		local conf = config.values
+		local explicit_delete = has_param(params, "delete")
+		local explicit_nodelete = has_param(params, "nodelete")
+		local use_queue = has_param(params, "queue") or has_param(params, "auto")
+
+		local merge_method = conf.default_merge_method
+		for _, param in ipairs(params) do
+			if utils.merge_method_to_flag[param] then
+				merge_method = param
+				break
+			end
+		end
+
+		local opts = {
+			buffer.number,
+			repo = pr.baseRepository.nameWithOwner,
+			["delete-branch"] = explicit_delete,
+		}
+		opts[merge_method] = true
+
+		if use_queue then
+			opts.auto = true
+		end
+
+		opts.opts = {
+			cb = function(output, stderr, exit_code)
+				if exit_code == 0 then
+					utils.info(select_message(stderr, output, "Pull request merged successfully"))
+				else
+					utils.error(select_message(stderr, output, "Failed to merge pull request"))
+				end
+
+				writers.write_state(buffer.bufnr)
+
+				if exit_code == 0 and not explicit_delete and not explicit_nodelete and not use_queue then
+					prompt_delete_head_branch(pr, function()
+						close_pr_buffer(buffer.bufnr)
+					end)
+				elseif exit_code == 0 then
+					close_pr_buffer(buffer.bufnr)
+				end
+			end,
+		}
+
+		gh.pr.merge(opts)
+	end
+end
+
 local function open_url(url)
 	if vim.ui.open then
 		vim.ui.open(url)
@@ -1151,6 +1322,8 @@ function M.setup()
 			icons = true, -- requires nvim-web-devicons or mini.icons
 		},
 	})
+	setup_pr_options_diffview()
+	setup_prompt_delete_branch_after_merge()
 	setup_compact_octo_details()
 	setup_timeline_visuals()
 	setup_cmp_completion()
