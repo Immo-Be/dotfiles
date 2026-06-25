@@ -12,6 +12,7 @@ function M.setup()
 			"astro",
 			"bashls", -- Add bashls for shell script support
 		},
+		automatic_enable = false,
 	})
 
 	local capabilities = require("cmp_nvim_lsp").default_capabilities()
