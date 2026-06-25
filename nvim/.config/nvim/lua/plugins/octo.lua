@@ -522,8 +522,12 @@ local function setup_timeline_visuals()
 	local comment_headers = {}
 	local markdown_ns = vim.api.nvim_create_namespace("octo_markdown_visuals")
 
+	local function valid_buffer_line(bufnr, line)
+		return vim.api.nvim_buf_is_valid(bufnr) and line and line > 0 and line <= vim.api.nvim_buf_line_count(bufnr)
+	end
+
 	local function mark_line(bufnr, line, group)
-		if line and line > 0 then
+		if valid_buffer_line(bufnr, line) then
 			vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
 				line_hl_group = group,
 				priority = 20,
@@ -562,7 +566,7 @@ local function setup_timeline_visuals()
 	end
 
 	local function set_line_overlay(bufnr, line, chunks, group, source_text)
-		if line and line > 0 then
+		if valid_buffer_line(bufnr, line) then
 			if source_text then
 				local padding = vim.fn.strdisplaywidth(source_text) - chunk_width(chunks)
 				if padding > 0 then
@@ -581,7 +585,7 @@ local function setup_timeline_visuals()
 	end
 
 	local function set_heading_overlay(bufnr, line, chunks, source_text, group)
-		if line and line > 0 then
+		if valid_buffer_line(bufnr, line) then
 			local width = math.max(vim.fn.winwidth(0) - 8, 20)
 			if source_text then
 				local padding = vim.fn.strdisplaywidth(source_text) - chunk_width(chunks)
@@ -603,7 +607,7 @@ local function setup_timeline_visuals()
 	end
 
 	local function set_section_divider(bufnr, line, group)
-		if line and line > 0 then
+		if valid_buffer_line(bufnr, line) then
 			local width = math.max(vim.fn.winwidth(0) - 8, 20)
 			local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
 			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, 0, {
@@ -625,7 +629,7 @@ local function setup_timeline_visuals()
 	end
 
 	local function mark_section_line(bufnr, line, group)
-		if line and line > 0 then
+		if valid_buffer_line(bufnr, line) then
 			vim.api.nvim_buf_set_extmark(bufnr, markdown_ns, line - 1, 0, {
 				line_hl_group = group,
 				priority = 60,
@@ -634,6 +638,10 @@ local function setup_timeline_visuals()
 	end
 
 	local function mark_inline_code(bufnr, line, text)
+		if not valid_buffer_line(bufnr, line) then
+			return
+		end
+
 		local from = 1
 		while true do
 			local start_col, end_col = text:find("`[^`]+`", from)
@@ -719,7 +727,14 @@ local function setup_timeline_visuals()
 	end
 
 	local function apply_markdown_visuals(bufnr, first, last, section_groups)
-		if not first or not last or last < first then
+		if not vim.api.nvim_buf_is_valid(bufnr) or not first or not last or last < first then
+			return
+		end
+
+		local line_count = vim.api.nvim_buf_line_count(bufnr)
+		first = math.max(1, first)
+		last = math.min(last, line_count)
+		if last < first then
 			return
 		end
 
@@ -781,7 +796,7 @@ local function setup_timeline_visuals()
 	end
 
 	local function render_comment_header(bufnr, line, opts)
-		if not vim.api.nvim_buf_is_valid(bufnr) then
+		if not valid_buffer_line(bufnr, line) then
 			return
 		end
 
@@ -837,7 +852,7 @@ local function setup_timeline_visuals()
 	end
 
 	local function render_thread_header(bufnr, line, opts)
-		if not vim.api.nvim_buf_is_valid(bufnr) then
+		if not valid_buffer_line(bufnr, line) then
 			return
 		end
 
@@ -879,6 +894,12 @@ local function setup_timeline_visuals()
 	end
 
 	local function update_thread_headers(bufnr)
+		if not vim.api.nvim_buf_is_valid(bufnr) then
+			thread_headers[bufnr] = nil
+			comment_headers[bufnr] = nil
+			return
+		end
+
 		for line, opts in pairs(thread_headers[bufnr] or {}) do
 			render_thread_header(bufnr, line, opts)
 		end
@@ -1021,6 +1042,25 @@ local function open_pr_diffview()
 	vim.cmd("DiffviewOpen " .. vim.fn.fnameescape(base) .. "..." .. vim.fn.fnameescape(head))
 end
 
+local function copy_current_pr_branch(branch_kind)
+	local utils = require("octo.utils")
+	local buffer = utils.get_current_buffer()
+	if not buffer or not buffer:isPullRequest() then
+		vim.notify("Open an Octo PR buffer first", vim.log.levels.WARN)
+		return
+	end
+
+	local pr = buffer:pullRequest()
+	local branch = branch_kind == "base" and pr.baseRefName or pr.headRefName
+	if not is_present(branch) then
+		vim.notify("Could not find PR " .. branch_kind .. " branch", vim.log.levels.ERROR)
+		return
+	end
+
+	vim.fn.setreg("+", branch)
+	vim.notify("Copied " .. branch_kind .. " branch: " .. branch, vim.log.levels.INFO)
+end
+
 local function setup_pr_options_diffview()
 	local mappings = require("octo.mappings")
 	if mappings.pr_options_with_diffview then
@@ -1036,15 +1076,37 @@ local function setup_pr_options_diffview()
 		vim.ui.select = function(items, opts, on_choice)
 			if opts and opts.prompt == "Select an option:" and vim.tbl_contains(items, "Start Review") then
 				local diffview_option = "See Diff Changes"
+				local merge_after_checks_option = "Merge PR After Checks Success"
+				local copy_feature_branch_option = "Copy Feature Branch Name"
+				local copy_base_branch_option = "Copy Base Branch Name"
 				local choices = vim.list_extend({}, items)
 
-				if not vim.tbl_contains(choices, diffview_option) then
-					table.insert(choices, diffview_option)
+				for _, extra_option in ipairs({
+					diffview_option,
+					merge_after_checks_option,
+					copy_feature_branch_option,
+					copy_base_branch_option,
+				}) do
+					if not vim.tbl_contains(choices, extra_option) then
+						table.insert(choices, extra_option)
+					end
 				end
 
 				return original_select(choices, opts, function(choice, idx)
 					if choice == diffview_option then
 						open_pr_diffview()
+						return
+					end
+					if choice == merge_after_checks_option then
+						require("octo.commands").commands.pr.merge("auto")
+						return
+					end
+					if choice == copy_feature_branch_option then
+						copy_current_pr_branch("feature")
+						return
+					end
+					if choice == copy_base_branch_option then
+						copy_current_pr_branch("base")
 						return
 					end
 
@@ -1320,6 +1382,13 @@ function M.setup()
 		file_panel = {
 			size  = 10,
 			icons = true, -- requires nvim-web-devicons or mini.icons
+		},
+
+		poll = {
+			enabled = true,
+			interval = 10000,
+			notify_on_refresh = true,
+			notify_on_change = true,
 		},
 	})
 	setup_pr_options_diffview()
