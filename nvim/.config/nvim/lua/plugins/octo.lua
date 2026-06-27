@@ -6,6 +6,14 @@ local function octo(command)
 	end
 end
 
+local function open_my_prs()
+	vim.cmd("Octo search is:pr is:open author:@me archived:false")
+end
+
+local function open_all_prs()
+	vim.cmd("Octo search is:pr is:open involves:@me archived:false")
+end
+
 local function git_stdout(args)
 	local result = vim.system(vim.list_extend({ "git" }, args), { text = true }):wait()
 	if result.code ~= 0 then
@@ -148,17 +156,29 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoBadBubble", { fg = "#232634", bg = "#e78284", bold = true })
 	vim.api.nvim_set_hl(0, "OctoInfoBubble", { fg = "#232634", bg = "#8caaee", bold = true })
 	vim.api.nvim_set_hl(0, "OctoMetricBubble", { fg = "#c6d0f5", bg = "#414559" })
-	vim.api.nvim_set_hl(0, "OctoReviewLine", { bg = "#3b4058" })
-	vim.api.nvim_set_hl(0, "OctoThreadLine", { bg = "#333b4f" })
+	-- REVIEWS: Strong purple-tinted card backgrounds (GitHub-style bordered cards)
+	vim.api.nvim_set_hl(0, "OctoReviewLine", { bg = "#474968", fg = "#babbf1", bold = true })
+	vim.api.nvim_set_hl(0, "OctoReviewBodyLine", { bg = "#363750" })
+	vim.api.nvim_set_hl(0, "OctoReviewBodyAltLine", { bg = "#3a3b54" })
+	vim.api.nvim_set_hl(0, "OctoReviewBorder", { fg = "#8caaee", bold = true })
+	vim.api.nvim_set_hl(0, "OctoReviewDivider", { fg = "#51576d" })
+
+	-- THREADS: Strong blue-tinted backgrounds with high contrast
+	vim.api.nvim_set_hl(0, "OctoThreadLine", { bg = "#354a5f", fg = "#8caaee", bold = true })
+	vim.api.nvim_set_hl(0, "OctoThreadBodyLine", { bg = "#2a3b4d" })
+	vim.api.nvim_set_hl(0, "OctoThreadBodyAltLine", { bg = "#2e3f51" })
+	vim.api.nvim_set_hl(0, "OctoThreadBorder", { fg = "#8caaee", bold = true })
+
+	-- COMMENTS: Neutral backgrounds
 	vim.api.nvim_set_hl(0, "OctoCommentBodyLine", { bg = "#303446" })
-	vim.api.nvim_set_hl(0, "OctoReviewBodyLine", { bg = "#34394d" })
-	vim.api.nvim_set_hl(0, "OctoReviewBodyAltLine", { bg = "#383d52" })
-	vim.api.nvim_set_hl(0, "OctoThreadBodyLine", { bg = "#373c51" })
-	vim.api.nvim_set_hl(0, "OctoThreadBodyAltLine", { bg = "#3b4056" })
-	vim.api.nvim_set_hl(0, "OctoIssueBodyLine", { bg = "#32374a" })
-	vim.api.nvim_set_hl(0, "OctoIssueBodyAltLine", { bg = "#363b50" })
-	vim.api.nvim_set_hl(0, "OctoSnippetLine", { bg = "#292c3c" })
-	vim.api.nvim_set_hl(0, "OctoSnippetBorder", { fg = "#8caaee", bg = "#292c3c" })
+	vim.api.nvim_set_hl(0, "OctoIssueBodyLine", { bg = "#2e3440" })
+	vim.api.nvim_set_hl(0, "OctoIssueBodyAltLine", { bg = "#323844" })
+
+	-- Section separators (bold dividers between reviews/threads)
+	vim.api.nvim_set_hl(0, "OctoSectionDivider", { fg = "#626880", bold = true })
+	-- CODE SNIPPETS: Very dark background with strong borders
+	vim.api.nvim_set_hl(0, "OctoSnippetLine", { bg = "#1e1e2e" })
+	vim.api.nvim_set_hl(0, "OctoSnippetBorder", { fg = "#8caaee", bg = "#1e1e2e", bold = true })
 	vim.api.nvim_set_hl(0, "OctoMarkdownLink", { fg = "#8caaee", underline = true })
 	vim.api.nvim_set_hl(0, "OctoMarkdownUrl", { fg = "#838ba7", italic = true })
 	vim.api.nvim_set_hl(0, "OctoMarkdownInlineCode", { fg = "#ef9f76", bg = "#414559" })
@@ -637,6 +657,52 @@ local function setup_timeline_visuals()
 		end
 	end
 
+	local function add_section_spacing(bufnr, line, kind)
+		-- Add dramatic visual separation between major sections (Reviews vs Threads vs Comments)
+		-- This creates GitHub-style "cards" for each review/thread
+		if not valid_buffer_line(bufnr, line) then
+			return
+		end
+
+		local spacing_width = math.max(vim.fn.winwidth(0) - 8, 20)
+		local divider_char = "━"
+		local spacing_hl = "OctoSectionDivider"
+
+		if kind == "PullRequestReview" then
+			spacing_hl = "OctoReviewBorder"
+			-- Add a full-width top border for review cards
+			vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+				virt_lines_above = true,
+				virt_lines = {
+					{ { "", "Normal" } }, -- Empty line for spacing
+					{ { "┏" .. string.rep(divider_char, spacing_width - 1), spacing_hl } }, -- Top border
+				},
+				priority = 15,
+			})
+		elseif kind == "PullRequestReviewComment" or kind == "PullRequestComment" then
+			spacing_hl = "OctoThreadBorder"
+			-- Add indented border for thread sections
+			local indent = string.rep(" ", 4)
+			vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+				virt_lines_above = true,
+				virt_lines = {
+					{ { "", "Normal" } }, -- Empty line for spacing
+					{ { indent .. "┏" .. string.rep("─", math.max(spacing_width - 5, 15)), spacing_hl } },
+				},
+				priority = 15,
+			})
+		else
+			-- Standard section separator
+			vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+				virt_lines_above = true,
+				virt_lines = {
+					{ { "", "Normal" } }, -- Empty line for spacing
+				},
+				priority = 15,
+			})
+		end
+	end
+
 	local function mark_inline_code(bufnr, line, text)
 		if not valid_buffer_line(bufnr, line) then
 			return
@@ -805,23 +871,33 @@ local function setup_timeline_visuals()
 		local author = comment.author and logins.format_author(comment.author) or { login = "unknown" }
 		local heading = "COMMENT"
 		local line_group = "OctoReviewLine"
+		local marker_hl = "OctoTimelineMarker"
+		local prefix = ""
 
 		if kind == "PullRequestReview" then
 			heading = "REVIEW"
+			marker_hl = "OctoReviewBorder"
+			prefix = "┃ "
 		elseif kind == "PullRequestReviewComment" then
 			heading = "THREAD COMMENT"
 			line_group = "OctoThreadLine"
+			marker_hl = "OctoThreadBorder"
+			prefix = "    ┃ " -- Indented for thread context
 		elseif kind == "PullRequestComment" then
 			heading = "COMMENT"
 			line_group = "OctoThreadLine"
+			marker_hl = "OctoThreadBorder"
+			prefix = "    ┃ "
 		elseif kind == "IssueComment" or kind == "DiscussionComment" then
 			heading = utils.is_blank(comment.replyTo) and "COMMENT" or "REPLY"
+			prefix = "┃ "
 		end
 
 		local header_vt = {
-			{ fold_marker(line) .. " ", "OctoFoldMarker" },
-			{ timeline_marker() .. " ", "OctoTimelineMarker" },
-			{ heading .. "  ", "OctoTimelineItemHeading" },
+			{ prefix, marker_hl },
+			{ fold_marker(line), "OctoFoldMarker" },
+			{ " " .. heading .. " ", "OctoTimelineItemHeading" },
+			{ " by ", "OctoOverviewMuted" },
 			{ author.login, comment.viewerDidAuthor and "OctoUserViewer" or "OctoUser" },
 			{ "  ", "OctoSymbol" },
 		}
@@ -836,9 +912,9 @@ local function setup_timeline_visuals()
 			vim.list_extend(header_vt, bubbles.make_bubble(comment.state:lower(), state_bubble_highlight(comment.state), { right_margin_width = 1 }))
 		end
 
-		table.insert(header_vt, { utils.format_date(comment.createdAt), "OctoDate" })
+		table.insert(header_vt, { "  " .. utils.format_date(comment.createdAt), "OctoDate" })
 		if is_present(comment.lastEditedAt) and comment.lastEditedAt ~= comment.createdAt then
-			table.insert(header_vt, { "  edited " .. utils.format_date(comment.lastEditedAt), "OctoDate" })
+			table.insert(header_vt, { "  (edited " .. utils.format_date(comment.lastEditedAt) .. ")", "OctoDate" })
 		end
 
 		vim.api.nvim_buf_clear_namespace(bufnr, ns, line - 1, line)
@@ -860,13 +936,14 @@ local function setup_timeline_visuals()
 		local indent = string.rep(" ", conf.timeline_indent)
 		local header_vt = {
 			{ indent, "Normal" },
-			{ fold_marker(line) .. " ", "OctoFoldMarker" },
-			{ timeline_marker() .. " ", "OctoTimelineMarker" },
-			{ "THREAD  ", "OctoTimelineItemHeading" },
-			{ opts.path .. " ", "OctoDetailsLabel" },
-			{ tostring(opts.start_line) .. ":" .. tostring(opts.end_line), "OctoDetailsValue" },
-			{ "  commit ", "OctoOverviewMuted" },
-			{ opts.commit, "OctoDetailsLabel" },
+			{ "┃ ", "OctoThreadBorder" },
+			{ fold_marker(line), "OctoFoldMarker" },
+			{ " THREAD ", "OctoTimelineItemHeading" },
+			{ " ● ", "OctoThreadBorder" },
+			{ opts.path, "OctoDetailsLabel" },
+			{ " L" .. tostring(opts.start_line) .. "-" .. tostring(opts.end_line), "OctoDetailsValue" },
+			{ "  @ ", "OctoOverviewMuted" },
+			{ opts.commit:sub(1, 7), "OctoDetailsLabel" },
 			{ "  ", "OctoSymbol" },
 		}
 
@@ -875,10 +952,10 @@ local function setup_timeline_visuals()
 		end
 
 		if opts.isResolved then
-			table.insert(header_vt, { "✓", "OctoGreen" })
+			table.insert(header_vt, { " ✓ ", "OctoGreen" })
 			if opts.resolvedBy then
 				vim.list_extend(header_vt, {
-					{ " resolved by ", "OctoOverviewMuted" },
+					{ "resolved by ", "OctoOverviewMuted" },
 					{ opts.resolvedBy.login, "OctoUser" },
 				})
 			end
@@ -958,6 +1035,9 @@ local function setup_timeline_visuals()
 			return start_line, end_line
 		end
 
+		-- Add spacing before major sections for visual separation
+		add_section_spacing(bufnr, start_line, kind)
+
 		if kind == "PullRequestReview" then
 			comment_headers[bufnr] = comment_headers[bufnr] or {}
 			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
@@ -965,6 +1045,18 @@ local function setup_timeline_visuals()
 			mark_line(bufnr, start_line, "OctoReviewLine")
 			mark_range(bufnr, start_line + 1, end_line, "OctoReviewBodyLine")
 			apply_markdown_visuals(bufnr, start_line + 1, end_line, { "OctoReviewBodyLine", "OctoReviewBodyAltLine" })
+
+			-- Add bottom border for review card
+			if valid_buffer_line(bufnr, end_line) then
+				local spacing_width = math.max(vim.fn.winwidth(0) - 8, 20)
+				vim.api.nvim_buf_set_extmark(bufnr, ns, end_line - 1, 0, {
+					virt_lines = {
+						{ { "┗" .. string.rep("━", spacing_width - 1), "OctoReviewBorder" } }, -- Bottom border
+						{ { "", "Normal" } }, -- Empty line after review
+					},
+					priority = 15,
+				})
+			end
 		elseif kind == "PullRequestReviewComment" or kind == "PullRequestComment" then
 			comment_headers[bufnr] = comment_headers[bufnr] or {}
 			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
@@ -972,6 +1064,18 @@ local function setup_timeline_visuals()
 			mark_line(bufnr, start_line, "OctoThreadLine")
 			mark_range(bufnr, start_line + 1, end_line, "OctoThreadBodyLine")
 			apply_markdown_visuals(bufnr, start_line + 1, end_line, { "OctoThreadBodyLine", "OctoThreadBodyAltLine" })
+
+			-- Add bottom border for thread comment
+			if valid_buffer_line(bufnr, end_line) then
+				local spacing_width = math.max(vim.fn.winwidth(0) - 8, 20)
+				local indent = string.rep(" ", 4)
+				vim.api.nvim_buf_set_extmark(bufnr, ns, end_line - 1, 0, {
+					virt_lines = {
+						{ { indent .. "┗" .. string.rep("─", math.max(spacing_width - 5, 15)), "OctoThreadBorder" } },
+					},
+					priority = 15,
+				})
+			end
 		elseif kind == "IssueComment" or kind == "DiscussionComment" then
 			comment_headers[bufnr] = comment_headers[bufnr] or {}
 			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
@@ -1010,8 +1114,29 @@ local function setup_timeline_visuals()
 
 		if snippet_start and snippet_end and snippet_end >= snippet_start then
 			mark_range(bufnr, snippet_start, snippet_end, "OctoSnippetLine")
-			mark_line(bufnr, snippet_start, "OctoSnippetBorder")
-			mark_line(bufnr, snippet_end, "OctoSnippetBorder")
+			-- Add dramatic visual borders around code snippets
+			if valid_buffer_line(bufnr, snippet_start) then
+				local width = math.max(vim.fn.winwidth(0) - 8, 20)
+				local indent = string.rep(" ", 6) -- Indent code snippets
+				vim.api.nvim_buf_set_extmark(bufnr, ns, snippet_start - 1, 0, {
+					virt_lines_above = true,
+					virt_lines = {
+						{ { indent .. "╭─ Code Context " .. string.rep("─", math.max(width - 25, 5)), "OctoSnippetBorder" } },
+					},
+					priority = 25,
+				})
+			end
+			if valid_buffer_line(bufnr, snippet_end) then
+				local width = math.max(vim.fn.winwidth(0) - 8, 20)
+				local indent = string.rep(" ", 6)
+				vim.api.nvim_buf_set_extmark(bufnr, ns, snippet_end - 1, 0, {
+					virt_lines = {
+						{ { indent .. "╰" .. string.rep("─", math.max(width - 7, 15)), "OctoSnippetBorder" } },
+						{ { "", "Normal" } }, -- Empty line after snippet
+					},
+					priority = 25,
+				})
+			end
 		end
 
 		return snippet_start, snippet_end
@@ -1375,8 +1500,8 @@ function M.setup()
 
 		-- ── Timeline ─────────────────────────────────────────────────────────
 		use_timeline_icons = true,
-		timeline_indent    = 2,
-		timeline_marker    = "│",
+		timeline_indent    = 6, -- Increased to 6 for dramatic visual hierarchy like GitHub
+		timeline_marker    = "┃", -- Thicker marker for better visibility
 
 		-- ── Changed-files panel ───────────────────────────────────────────────
 		file_panel = {
@@ -1411,6 +1536,8 @@ function M.setup()
 	vim.keymap.set("n", "<leader>Hs", function()
 		require("octo.utils").create_base_search_command({ include_current_repo = true })
 	end, { desc = "Octo search current repo", silent = true })
+	vim.api.nvim_create_user_command("Myprs", open_my_prs, { desc = "Octo list open PRs authored by me" })
+	vim.api.nvim_create_user_command("Allprs", open_all_prs, { desc = "Octo list open PRs involving me" })
 
 	vim.api.nvim_create_autocmd("FileType", {
 		group = vim.api.nvim_create_augroup("OctoOpenUrl", { clear = true }),
