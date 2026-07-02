@@ -39,6 +39,7 @@ function M.setup()
 		{ "<leader>f", group = "Find" },
 		{ "<leader>h", group = "Git (Hunk)" },
 		{ "<leader>H", group = "GitHub (Octo)" },
+		{ "<leader>9", group = "99" },
 		{ "<leader>s", group = "Swap/Signature" },
 		{ "<leader>t", group = "Tab/Toggle" },
 		{ "<leader>w", group = "Workspace" },
