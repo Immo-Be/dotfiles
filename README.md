@@ -57,6 +57,7 @@ Use `--target=$HOME` to ensure correct symlink paths.
 stow --target=$HOME nvim
 stow --target=$HOME tmux
 stow --target=$HOME zsh
+stow --target=$HOME herdr
 ```
 
 ---
