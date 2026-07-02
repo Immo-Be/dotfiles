@@ -102,11 +102,18 @@ local function setup_cmp_completion()
 
 		local completion_items = {}
 		for _, item in ipairs(items) do
+			local is_issue = vim.startswith(item.word or "", "#")
+			local title = item.menu or item.abbr or ""
 			table.insert(completion_items, {
-				label = item.word,
+				label = is_issue and vim.trim(item.word .. " " .. title) or item.word,
 				insertText = item.word,
-				detail = item.menu,
-				documentation = item.abbr,
+				filterText = is_issue and vim.trim(item.word .. " " .. title) or item.word,
+				detail = is_issue and "GitHub issue" or item.menu,
+				documentation = title,
+				data = is_issue and {
+					octo_issue_number = item.word,
+					octo_issue_title = title,
+				} or nil,
 			})
 		end
 
@@ -118,14 +125,50 @@ local function setup_cmp_completion()
 	local sources = vim.tbl_filter(function(source_config)
 		return source_config.name ~= "octo"
 	end, cmp.get_config().sources or {})
+	local existing_format = vim.tbl_get(cmp.get_config(), "formatting", "format")
 
 	cmp.setup({
 		sources = cmp.config.sources({
 			{ name = "octo", priority = 1100, keyword_length = 0 },
 		}, sources),
+		formatting = {
+			format = function(entry, vim_item)
+				if existing_format then
+					vim_item = existing_format(entry, vim_item)
+				end
+
+				local data = entry.completion_item.data
+				if entry.source.name == "octo" and data and data.octo_issue_title then
+					vim_item.abbr = data.octo_issue_number
+					vim_item.kind = "Issue"
+					vim_item.kind_hl_group = "OctoCmpIssueKind"
+					vim_item.menu = "  " .. data.octo_issue_title .. "  "
+					vim_item.menu_hl_group = "OctoCmpIssueTitle"
+				end
+
+				return vim_item
+			end,
+		},
 	})
 
 	vim.g.octo_cmp_source_registered = true
+end
+
+local function complete_octo_issue_reference()
+	vim.schedule(function()
+		local ok, cmp = pcall(require, "cmp")
+		if ok and vim.bo.filetype == "octo" then
+			cmp.complete({
+				config = {
+					sources = {
+						{ name = "octo" },
+					},
+				},
+			})
+		end
+	end)
+
+	return "#"
 end
 
 -- Set highlight overrides BEFORE octo.setup() so octo doesn't clobber them
@@ -134,6 +177,8 @@ end
 local function setup_highlights()
 	-- PR/issue title: lavender + bold, prominent like GitHub's h1
 	vim.api.nvim_set_hl(0, "OctoIssueTitle", { fg = "#babbf1", bold = true })
+	vim.api.nvim_set_hl(0, "OctoCmpIssueKind", { fg = "#232634", bg = "#8caaee", bold = true })
+	vim.api.nvim_set_hl(0, "OctoCmpIssueTitle", { fg = "#c6d0f5", bg = "#414559" })
 	-- Sidebar metadata labels (Reviewers, Assignees, Labels…): muted subtext
 	vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#a5adce", bold = true })
 	-- Timestamps: dimmer than regular comment text
@@ -164,10 +209,14 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoReviewDivider", { fg = "#51576d" })
 
 	-- THREADS: Strong blue-tinted backgrounds with high contrast
-	vim.api.nvim_set_hl(0, "OctoThreadLine", { bg = "#354a5f", fg = "#8caaee", bold = true })
-	vim.api.nvim_set_hl(0, "OctoThreadBodyLine", { bg = "#2a3b4d" })
-	vim.api.nvim_set_hl(0, "OctoThreadBodyAltLine", { bg = "#2e3f51" })
-	vim.api.nvim_set_hl(0, "OctoThreadBorder", { fg = "#8caaee", bold = true })
+	vim.api.nvim_set_hl(0, "OctoThreadLine", { bg = "#243b53", fg = "#c6d0f5", bold = true })
+	vim.api.nvim_set_hl(0, "OctoThreadBodyLine", { bg = "#26384a" })
+	vim.api.nvim_set_hl(0, "OctoThreadBodyAltLine", { bg = "#2b3f52" })
+	vim.api.nvim_set_hl(0, "OctoThreadBorder", { fg = "#99d1db", bg = "#1f2d3d", bold = true })
+	vim.api.nvim_set_hl(0, "OctoThreadRail", { fg = "#99d1db", bg = "#26384a", bold = true })
+	vim.api.nvim_set_hl(0, "OctoThreadRailDim", { fg = "#6e8da0", bg = "#26384a" })
+	vim.api.nvim_set_hl(0, "OctoThreadCap", { fg = "#232634", bg = "#99d1db", bold = true })
+	vim.api.nvim_set_hl(0, "OctoThreadMutedCap", { fg = "#99d1db", bg = "#1f2d3d" })
 
 	-- COMMENTS: Neutral backgrounds
 	vim.api.nvim_set_hl(0, "OctoCommentBodyLine", { bg = "#303446" })
@@ -539,6 +588,7 @@ local function setup_timeline_visuals()
 	local original_write_body_agnostic = writers.write_body_agnostic
 	local original_write_thread_snippet = writers.write_thread_snippet
 	local thread_headers = {}
+	local thread_end_caps = {}
 	local comment_headers = {}
 	local markdown_ns = vim.api.nvim_create_namespace("octo_markdown_visuals")
 
@@ -563,6 +613,98 @@ local function setup_timeline_visuals()
 		for line = first, last do
 			mark_line(bufnr, line, group)
 		end
+	end
+
+	local function visual_width()
+		return math.max(vim.fn.winwidth(0) - 14, 24)
+	end
+
+	local function truncate_text(text, max_width)
+		text = tostring(text or "")
+		if vim.fn.strdisplaywidth(text) <= max_width then
+			return text
+		end
+
+		if max_width <= 1 then
+			return "…"
+		end
+
+		local ret = ""
+		for _, char in ipairs(vim.fn.split(text, "\\zs")) do
+			if vim.fn.strdisplaywidth(ret .. char .. "…") > max_width then
+				break
+			end
+			ret = ret .. char
+		end
+
+		return ret .. "…"
+	end
+
+	local function thread_rail_prefix(strong)
+		return {
+			{ "  ", "Normal" },
+			{ strong and "┃ " or "│ ", strong and "OctoThreadRail" or "OctoThreadRailDim" },
+		}
+	end
+
+	local function mark_thread_range(bufnr, first, last, group)
+		if not first or not last or last < first then
+			return
+		end
+
+		for line = first, last do
+			if valid_buffer_line(bufnr, line) then
+				vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+					virt_text = thread_rail_prefix(false),
+					virt_text_pos = "inline",
+					line_hl_group = group,
+					priority = 35,
+				})
+			end
+		end
+	end
+
+	local function set_thread_cap(bufnr, line, label, above)
+		if not valid_buffer_line(bufnr, line) then
+			return
+		end
+
+		local width = visual_width()
+		local title = " " .. label .. " "
+		local prefix = "  ╭"
+		local remaining = math.max(width - vim.fn.strdisplaywidth(prefix) - vim.fn.strdisplaywidth(title), 8)
+		local cap = {
+			{ prefix, "OctoThreadBorder" },
+			{ title, "OctoThreadCap" },
+			{ string.rep("─", remaining), "OctoThreadBorder" },
+		}
+
+		vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+			virt_lines = { cap },
+			virt_lines_above = above,
+			priority = 28,
+		})
+	end
+
+	local function set_thread_end_cap(bufnr, line)
+		if not valid_buffer_line(bufnr, line) then
+			return
+		end
+
+		return vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+			virt_lines = {
+				{ { "  ╰" .. string.rep("─", visual_width() - 3), "OctoThreadBorder" } },
+				{ { "", "Normal" } },
+			},
+			priority = 28,
+		})
+	end
+
+	local function replace_thread_end_cap(bufnr, line)
+		if thread_end_caps[bufnr] then
+			pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, thread_end_caps[bufnr])
+		end
+		thread_end_caps[bufnr] = set_thread_end_cap(bufnr, line)
 	end
 
 	local function timeline_marker()
@@ -664,7 +806,7 @@ local function setup_timeline_visuals()
 			return
 		end
 
-		local spacing_width = math.max(vim.fn.winwidth(0) - 8, 20)
+		local spacing_width = visual_width()
 		local divider_char = "━"
 		local spacing_hl = "OctoSectionDivider"
 
@@ -682,12 +824,15 @@ local function setup_timeline_visuals()
 		elseif kind == "PullRequestReviewComment" or kind == "PullRequestComment" then
 			spacing_hl = "OctoThreadBorder"
 			-- Add indented border for thread sections
-			local indent = string.rep(" ", 4)
 			vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
 				virt_lines_above = true,
 				virt_lines = {
-					{ { "", "Normal" } }, -- Empty line for spacing
-					{ { indent .. "┏" .. string.rep("─", math.max(spacing_width - 5, 15)), spacing_hl } },
+					{ { "", "Normal" } },
+					{
+						{ "  ├", spacing_hl },
+						{ " comment ", "OctoThreadMutedCap" },
+						{ string.rep("─", math.max(spacing_width - 12, 10)), spacing_hl },
+					},
 				},
 				priority = 15,
 			})
@@ -882,12 +1027,12 @@ local function setup_timeline_visuals()
 			heading = "THREAD COMMENT"
 			line_group = "OctoThreadLine"
 			marker_hl = "OctoThreadBorder"
-			prefix = "    ┃ " -- Indented for thread context
+			prefix = "  ┃ "
 		elseif kind == "PullRequestComment" then
 			heading = "COMMENT"
 			line_group = "OctoThreadLine"
 			marker_hl = "OctoThreadBorder"
-			prefix = "    ┃ "
+			prefix = "  ┃ "
 		elseif kind == "IssueComment" or kind == "DiscussionComment" then
 			heading = utils.is_blank(comment.replyTo) and "COMMENT" or "REPLY"
 			prefix = "┃ "
@@ -932,16 +1077,28 @@ local function setup_timeline_visuals()
 			return
 		end
 
-		local conf = config.values
-		local indent = string.rep(" ", conf.timeline_indent)
+		local path_suffix = " L" .. tostring(opts.start_line) .. "-" .. tostring(opts.end_line)
+		local commit_suffix = "  @ " .. opts.commit:sub(1, 7)
+		local badge_reserve = 0
+		if opts.isOutdated then
+			badge_reserve = badge_reserve + 12
+		end
+		if opts.isResolved then
+			badge_reserve = badge_reserve + (opts.resolvedBy and 22 or 4)
+		end
+		local fixed_width = vim.fn.strdisplaywidth("  ┃ " .. fold_marker(line) .. " THREAD   ")
+			+ vim.fn.strdisplaywidth(path_suffix)
+			+ vim.fn.strdisplaywidth(commit_suffix)
+			+ badge_reserve
+		local path_width = math.max(18, visual_width() - fixed_width)
+
 		local header_vt = {
-			{ indent, "Normal" },
-			{ "┃ ", "OctoThreadBorder" },
+			{ "  ┃ ", "OctoThreadRail" },
 			{ fold_marker(line), "OctoFoldMarker" },
-			{ " THREAD ", "OctoTimelineItemHeading" },
-			{ " ● ", "OctoThreadBorder" },
-			{ opts.path, "OctoDetailsLabel" },
-			{ " L" .. tostring(opts.start_line) .. "-" .. tostring(opts.end_line), "OctoDetailsValue" },
+			{ " THREAD ", "OctoThreadCap" },
+			{ "  ", "OctoThreadBorder" },
+			{ truncate_text(opts.path, path_width), "OctoDetailsLabel" },
+			{ path_suffix, "OctoDetailsValue" },
 			{ "  @ ", "OctoOverviewMuted" },
 			{ opts.commit:sub(1, 7), "OctoDetailsLabel" },
 			{ "  ", "OctoSymbol" },
@@ -1062,20 +1219,10 @@ local function setup_timeline_visuals()
 			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
 			render_comment_header(bufnr, start_line, comment_headers[bufnr][start_line])
 			mark_line(bufnr, start_line, "OctoThreadLine")
-			mark_range(bufnr, start_line + 1, end_line, "OctoThreadBodyLine")
+			mark_thread_range(bufnr, start_line + 1, end_line, "OctoThreadBodyLine")
 			apply_markdown_visuals(bufnr, start_line + 1, end_line, { "OctoThreadBodyLine", "OctoThreadBodyAltLine" })
 
-			-- Add bottom border for thread comment
-			if valid_buffer_line(bufnr, end_line) then
-				local spacing_width = math.max(vim.fn.winwidth(0) - 8, 20)
-				local indent = string.rep(" ", 4)
-				vim.api.nvim_buf_set_extmark(bufnr, ns, end_line - 1, 0, {
-					virt_lines = {
-						{ { indent .. "┗" .. string.rep("─", math.max(spacing_width - 5, 15)), "OctoThreadBorder" } },
-					},
-					priority = 15,
-				})
-			end
+			replace_thread_end_cap(bufnr, end_line)
 		elseif kind == "IssueComment" or kind == "DiscussionComment" then
 			comment_headers[bufnr] = comment_headers[bufnr] or {}
 			comment_headers[bufnr][start_line] = { comment = comment, kind = kind }
@@ -1097,8 +1244,10 @@ local function setup_timeline_visuals()
 		local header_line = (line or vim.api.nvim_buf_line_count(bufnr) - 1) + 2
 		thread_headers[bufnr] = thread_headers[bufnr] or {}
 		thread_headers[bufnr][header_line] = opts
+		thread_end_caps[bufnr] = nil
 
 		writers.write_block(bufnr, { "" })
+		set_thread_cap(bufnr, header_line, "review thread", true)
 		render_thread_header(bufnr, header_line, opts)
 		mark_line(bufnr, header_line, "OctoThreadLine")
 		ensure_thread_header_updates(bufnr)
@@ -1113,26 +1262,30 @@ local function setup_timeline_visuals()
 			original_write_thread_snippet(bufnr, diffhunk, diffhunk_lang, start_line, comment_start, comment_end, comment_side)
 
 		if snippet_start and snippet_end and snippet_end >= snippet_start then
-			mark_range(bufnr, snippet_start, snippet_end, "OctoSnippetLine")
+			mark_thread_range(bufnr, snippet_start, snippet_end, "OctoSnippetLine")
 			-- Add dramatic visual borders around code snippets
 			if valid_buffer_line(bufnr, snippet_start) then
-				local width = math.max(vim.fn.winwidth(0) - 8, 20)
-				local indent = string.rep(" ", 6) -- Indent code snippets
+				local width = visual_width()
 				vim.api.nvim_buf_set_extmark(bufnr, ns, snippet_start - 1, 0, {
 					virt_lines_above = true,
 					virt_lines = {
-						{ { indent .. "╭─ Code Context " .. string.rep("─", math.max(width - 25, 5)), "OctoSnippetBorder" } },
+						{
+							{ "  ├", "OctoThreadBorder" },
+							{ " code context ", "OctoThreadMutedCap" },
+							{ string.rep("─", math.max(width - 17, 5)), "OctoSnippetBorder" },
+						},
 					},
 					priority = 25,
 				})
 			end
 			if valid_buffer_line(bufnr, snippet_end) then
-				local width = math.max(vim.fn.winwidth(0) - 8, 20)
-				local indent = string.rep(" ", 6)
+				local width = visual_width()
 				vim.api.nvim_buf_set_extmark(bufnr, ns, snippet_end - 1, 0, {
 					virt_lines = {
-						{ { indent .. "╰" .. string.rep("─", math.max(width - 7, 15)), "OctoSnippetBorder" } },
-						{ { "", "Normal" } }, -- Empty line after snippet
+						{
+							{ "  ├", "OctoThreadBorder" },
+							{ string.rep("─", math.max(width - 2, 15)), "OctoSnippetBorder" },
+						},
 					},
 					priority = 25,
 				})
@@ -1543,6 +1696,12 @@ function M.setup()
 		group = vim.api.nvim_create_augroup("OctoOpenUrl", { clear = true }),
 		pattern = "octo",
 		callback = function(event)
+			vim.keymap.set("i", "#", complete_octo_issue_reference, {
+				buffer = event.buf,
+				desc = "Complete Octo issue reference",
+				expr = true,
+				silent = true,
+			})
 			vim.keymap.set("n", "gx", open_current_octo_url, {
 				buffer = event.buf,
 				desc = "Open Octo markdown URL",
