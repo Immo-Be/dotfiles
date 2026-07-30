@@ -104,6 +104,9 @@ autoload edit-command-line
 zle -N edit-command-line
 bindkey -M vicmd 'v' edit-command-line
 
+
+# ctrl + space for accepting suggestion
+bindkey '^ ' autosuggest-accept
 ##### Google Cloud SDK (quiet)
 [[ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]] && source "$HOME/google-cloud-sdk/path.zsh.inc" >/dev/null 2>&1
 
