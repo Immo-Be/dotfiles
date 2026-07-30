@@ -37,4 +37,5 @@ vim.opt.swapfile = false
 
 -- Enable spell checking
 vim.opt.spell = true
+vim.opt.spellfile = vim.fn.stdpath("config") .. "/spell/en.utf-8.add"
 -- vim.opt.spelllang = { "en_us", "de_de" }
