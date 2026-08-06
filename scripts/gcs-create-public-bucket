@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+DEFAULT_LOCATION="europe-west10"
+DEFAULT_STORAGE_CLASS="STANDARD"
+
+PROJECT_ID=""
+BUCKET_NAME=""
+ASSUME_YES=false
+
+usage() {
+  cat <<'EOF'
+Usage: create-public-gcs-bucket.sh [options]
+
+Create a public Google Cloud Storage bucket in Berlin for the selected GCP project.
+
+Options:
+  --project <id>   Use the given GCP project for this run.
+  --bucket <name>  Create the bucket with the given name.
+  --yes            Skip interactive confirmations.
+  --help           Show this help text.
+EOF
+}
+
+die() {
+  printf 'Error: %s\n' "$1" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+}
+
+prompt() {
+  local message="$1"
+  local default_value="${2-}"
+  local value
+
+  if [[ -n "$default_value" ]]; then
+    read -r -p "$message [$default_value]: " value
+    printf '%s' "${value:-$default_value}"
+    return
+  fi
+
+  read -r -p "$message: " value
+  printf '%s' "$value"
+}
+
+confirm() {
+  local message="$1"
+  if $ASSUME_YES; then
+    return 0
+  fi
+
+  local response
+  read -r -p "$message [Y/n]: " response
+  [[ -z "$response" || "$response" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+validate_bucket_name() {
+  local name="$1"
+
+  [[ ${#name} -ge 3 && ${#name} -le 63 ]] || return 1
+  [[ "$name" =~ ^[a-z0-9][a-z0-9._-]*[a-z0-9]$ ]] || return 1
+  [[ ! "$name" =~ [._-]{2,} ]] || return 1
+  [[ ! "$name" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  return 0
+}
+
+project_exists() {
+  local project_id="$1"
+  gcloud projects describe "$project_id" >/dev/null 2>&1
+}
+
+list_buckets() {
+  local project_id="$1"
+  local list_output
+  local list_error
+
+  list_output=$(mktemp)
+  list_error=$(mktemp)
+  printf '\nExisting buckets in project %s:\n' "$project_id"
+  if ! gcloud storage buckets list --project="$project_id" --format='value(name)' >"$list_output" 2>"$list_error"; then
+    local error_output
+    error_output=$(< "$list_error")
+    rm -f "$list_output" "$list_error"
+    die "Failed to list buckets for project '$project_id'. ${error_output}"
+  fi
+
+  local buckets
+  buckets=$(< "$list_output")
+  rm -f "$list_output" "$list_error"
+
+  if [[ -z "$buckets" ]]; then
+    printf '  (no buckets found)\n'
+    return
+  fi
+
+  while IFS= read -r bucket; do
+    printf '  %s\n' "$bucket"
+  done <<< "$buckets"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project)
+      [[ $# -ge 2 ]] || die "Missing value for --project"
+      PROJECT_ID="$2"
+      shift 2
+      ;;
+    --bucket)
+      [[ $# -ge 2 ]] || die "Missing value for --bucket"
+      BUCKET_NAME="$2"
+      shift 2
+      ;;
+    --yes)
+      ASSUME_YES=true
+      shift
+      ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "Unknown option: $1"
+      ;;
+  esac
+done
+
+require_command gcloud
+
+if ! gcloud auth list --filter=status:ACTIVE --format='value(account)' | grep -q '.'; then
+  die "No active gcloud account found. Run 'gcloud auth login' first."
+fi
+
+if [[ -z "$PROJECT_ID" ]]; then
+  PROJECT_ID=$(gcloud config get-value project 2>/dev/null || true)
+fi
+
+if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
+  die "No active GCP project found. Pass --project <id> or set one with gcloud."
+fi
+
+printf 'Current GCP project: %s\n' "$PROJECT_ID"
+
+if ! $ASSUME_YES; then
+  if ! confirm "Continue with this project?"; then
+    PROJECT_ID=$(prompt "Enter the GCP project ID to use for this run")
+  fi
+fi
+
+[[ -n "$PROJECT_ID" ]] || die "Project ID cannot be empty."
+
+if ! project_exists "$PROJECT_ID"; then
+  die "Project '$PROJECT_ID' does not exist or is not accessible with the current account."
+fi
+
+list_buckets "$PROJECT_ID"
+
+if [[ -z "$BUCKET_NAME" ]]; then
+  printf '\n'
+  BUCKET_NAME=$(prompt "Enter the new bucket name")
+fi
+
+[[ -n "$BUCKET_NAME" ]] || die "Bucket name cannot be empty."
+
+if ! validate_bucket_name "$BUCKET_NAME"; then
+  die "Bucket name '$BUCKET_NAME' is invalid. Use 3-63 lowercase letters, numbers, dots, hyphens, or underscores."
+fi
+
+printf '\nAbout to create bucket:\n'
+printf '  Project: %s\n' "$PROJECT_ID"
+printf '  Bucket:  gs://%s\n' "$BUCKET_NAME"
+printf '  Region:  %s\n' "$DEFAULT_LOCATION"
+printf '  Class:   %s\n' "$DEFAULT_STORAGE_CLASS"
+printf '  Access:  Public object read\n'
+
+if ! confirm "Proceed?"; then
+  printf 'Aborted.\n'
+  exit 0
+fi
+
+create_output=$(mktemp)
+iam_output=$(mktemp)
+cleanup() {
+  rm -f "$create_output" "$iam_output"
+}
+trap cleanup EXIT
+
+if ! gcloud storage buckets create "gs://$BUCKET_NAME" \
+  --project="$PROJECT_ID" \
+  --location="$DEFAULT_LOCATION" \
+  --default-storage-class="$DEFAULT_STORAGE_CLASS" \
+  --uniform-bucket-level-access >"$create_output" 2>&1; then
+  error_output=$(< "$create_output")
+  if [[ "$error_output" == *"already owned by you"* || "$error_output" == *"already exists"* ]]; then
+    die "Bucket name '$BUCKET_NAME' is not available. Choose another globally unique name."
+  fi
+  die "Bucket creation failed. $error_output"
+fi
+
+if ! gcloud storage buckets add-iam-policy-binding "gs://$BUCKET_NAME" \
+  --project="$PROJECT_ID" \
+  --member='allUsers' \
+  --role='roles/storage.objectViewer' >"$iam_output" 2>&1; then
+  error_output=$(< "$iam_output")
+  if [[ "$error_output" == *"Public Access Prevention"* || "$error_output" == *"public access prevention"* ]]; then
+    die "Bucket was created, but public object access is blocked by Public Access Prevention. Adjust org or bucket policy if public access is required."
+  fi
+  die "Bucket was created, but enabling public object access failed. $error_output"
+fi
+
+printf '\nBucket created successfully.\n'
+printf '  gs://%s\n' "$BUCKET_NAME"
+printf '  https://storage.googleapis.com/%s/\n' "$BUCKET_NAME"
