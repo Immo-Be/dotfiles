@@ -67,7 +67,12 @@ function M.setup()
 	vim.keymap.set("n", "<leader>b", builtin.buffers, { desc = "Buffers" })
 	vim.keymap.set("n", "<leader>h", builtin.help_tags, { desc = "Help Tags" })
 
-	require("config.telescope.multigrep").setup()
+	vim.keymap.set("n", "<leader>g", function()
+		require("fzf-lua").live_grep()
+	end, { desc = "Live grep" })
+	vim.keymap.set("x", "<leader>g", function()
+		require("fzf-lua").grep_visual()
+	end, { desc = "Grep selected text" })
 
 	vim.keymap.set("n", "<leader>n", function()
 		builtin.live_grep({
