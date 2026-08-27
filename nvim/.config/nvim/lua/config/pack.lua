@@ -95,6 +95,7 @@ local pack_specs = {
 	gh("rafamadriz/friendly-snippets"),
 	gh("hrsh7th/cmp-path"),
 	gh("hrsh7th/cmp-buffer"),
+	gh("f3fora/cmp-spell"),
 	gh("hrsh7th/nvim-cmp"),
 	gh("windwp/nvim-autopairs"),
 	gh("christoomey/vim-tmux-navigator"),

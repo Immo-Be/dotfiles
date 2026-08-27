@@ -61,6 +61,7 @@ function M.setup()
 		mapping = cmp.mapping.preset.insert({
 			["<C-b>"] = cmp.mapping.scroll_docs(-4),
 			["<C-f>"] = cmp.mapping.scroll_docs(4),
+			["<C-Space>"] = cmp.mapping.complete(),
 			["<C-e>"] = cmp.mapping.abort(),
 			["<CR>"] = cmp.mapping.confirm({ select = true }),
 			["<Tab>"] = cmp.mapping(function(fallback)
@@ -97,6 +98,16 @@ function M.setup()
 				},
 			},
 		}, {
+			{
+				name = "spell",
+				priority = 300,
+				max_item_count = 3,
+				option = {
+					-- Keep spelling corrections such as `hwo` -> `how`, which
+					-- nvim-cmp's normal fuzzy matcher would otherwise discard.
+					keep_all_entries = true,
+				},
+			},
 			{ name = "buffer", priority = 250 },
 		}),
 		formatting = {
@@ -106,6 +117,7 @@ function M.setup()
 					luasnip = "  Snippet",
 					buffer = "  Buffer",
 					path = "  Path",
+					spell = "  Spell",
 				}
 				vim_item.menu = source_names[entry.source.name] or entry.source.name
 				return vim_item
