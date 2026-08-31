@@ -66,6 +66,27 @@ local function resolve_branch_ref(remote, branch, oid)
 	end
 end
 
+local function setup_issue_completion_metadata()
+	local OctoBuffer = require("octo.model.octo-buffer").OctoBuffer
+	local gh = require("octo.gh")
+
+	function OctoBuffer:async_fetch_issues()
+		gh.api.get({
+			"repos/{repo}/issues",
+			format = { repo = self.repo },
+			jq = 'map({title, number, is_pull_request: has("pull_request")})',
+			opts = {
+				cb = gh.create_callback({
+					success = function(data)
+						_G.octo_repo_issues[self.repo] = vim.json.decode(data)
+					end,
+					failure = function() end,
+				}),
+			},
+		})
+	end
+end
+
 local function setup_cmp_completion()
 	local ok, cmp = pcall(require, "cmp")
 	if not ok or vim.g.octo_cmp_source_registered then
@@ -73,6 +94,20 @@ local function setup_cmp_completion()
 	end
 
 	local source = {}
+	local function compare_issue_number(entry1, entry2)
+		if entry1.source.name ~= "octo" or entry2.source.name ~= "octo" then
+			return nil
+		end
+		if not entry1.context.cursor_before_line:match("#$") then
+			return nil
+		end
+
+		local issue1 = entry1.completion_item.data and entry1.completion_item.data.octo_issue_number
+		local issue2 = entry2.completion_item.data and entry2.completion_item.data.octo_issue_number
+		if issue1 and issue2 then
+			return tonumber(issue1:sub(2)) > tonumber(issue2:sub(2))
+		end
+	end
 
 	function source:is_available()
 		return vim.bo.filetype == "octo" and type(_G.octo_omnifunc) == "function"
@@ -83,21 +118,39 @@ local function setup_cmp_completion()
 	end
 
 	function source:get_keyword_pattern()
-		return [[\%(@[[:alnum:]_-]*\|#\d*\)]]
+		return [[\%(@[[:alnum:]_-]*\|#[[:alnum:]_-]*\)]]
 	end
 
 	function source:complete(params, callback)
 		local before_cursor = params.context.cursor_before_line
-		local base = before_cursor:match("(@[%w_-]*)$") or before_cursor:match("(#%d*)$")
+		local base = before_cursor:match("(@[%w_-]*)$") or before_cursor:match("(#[-%w_]*)$")
 		if not base then
 			callback({})
 			return
 		end
 
-		local ok_items, items = pcall(_G.octo_omnifunc, 0, base)
-		if not ok_items or type(items) ~= "table" then
-			callback({})
-			return
+		local items
+		if vim.startswith(base, "#") then
+			local buffer = require("octo.utils").get_current_buffer()
+			local issues_by_repo = _G.octo_repo_issues or {}
+			local issues = buffer and issues_by_repo[buffer.repo] or {}
+			items = vim.tbl_map(function(issue)
+				return {
+					word = "#" .. tostring(issue.number),
+					menu = issue.title,
+					is_pull_request = issue.is_pull_request,
+				}
+			end, issues)
+			table.sort(items, function(a, b)
+				return tonumber(a.word:sub(2)) > tonumber(b.word:sub(2))
+			end)
+		else
+			local ok_items
+			ok_items, items = pcall(_G.octo_omnifunc, 0, base)
+			if not ok_items or type(items) ~= "table" then
+				callback({})
+				return
+			end
 		end
 
 		local completion_items = {}
@@ -108,11 +161,13 @@ local function setup_cmp_completion()
 				label = is_issue and vim.trim(item.word .. " " .. title) or item.word,
 				insertText = item.word,
 				filterText = is_issue and vim.trim(item.word .. " " .. title) or item.word,
-				detail = is_issue and "GitHub issue" or item.menu,
+				sortText = is_issue and string.format("%010d", 9999999999 - tonumber(item.word:sub(2))) or nil,
+				detail = is_issue and (item.is_pull_request and "GitHub pull request" or "GitHub issue") or item.menu,
 				documentation = title,
 				data = is_issue and {
 					octo_issue_number = item.word,
 					octo_issue_title = title,
+					octo_is_pull_request = item.is_pull_request,
 				} or nil,
 			})
 		end
@@ -126,6 +181,9 @@ local function setup_cmp_completion()
 		return source_config.name ~= "octo"
 	end, cmp.get_config().sources or {})
 	local existing_format = vim.tbl_get(cmp.get_config(), "formatting", "format")
+	local existing_sorting = cmp.get_config().sorting or {}
+	local comparators = { compare_issue_number }
+	vim.list_extend(comparators, existing_sorting.comparators or {})
 
 	cmp.setup({
 		sources = cmp.config.sources({
@@ -140,14 +198,19 @@ local function setup_cmp_completion()
 				local data = entry.completion_item.data
 				if entry.source.name == "octo" and data and data.octo_issue_title then
 					vim_item.abbr = data.octo_issue_number
-					vim_item.kind = "Issue"
-					vim_item.kind_hl_group = "OctoCmpIssueKind"
+					vim_item.kind = data.octo_is_pull_request and "PR" or "Issue"
+					vim_item.kind_hl_group = data.octo_is_pull_request and "OctoCmpPullRequestKind"
+						or "OctoCmpIssueKind"
 					vim_item.menu = "  " .. data.octo_issue_title .. "  "
 					vim_item.menu_hl_group = "OctoCmpIssueTitle"
 				end
 
 				return vim_item
 			end,
+		},
+		sorting = {
+			priority_weight = existing_sorting.priority_weight,
+			comparators = comparators,
 		},
 	})
 
@@ -178,6 +241,7 @@ local function setup_highlights()
 	-- PR/issue title: lavender + bold, prominent like GitHub's h1
 	vim.api.nvim_set_hl(0, "OctoIssueTitle", { fg = "#babbf1", bold = true })
 	vim.api.nvim_set_hl(0, "OctoCmpIssueKind", { fg = "#232634", bg = "#8caaee", bold = true })
+	vim.api.nvim_set_hl(0, "OctoCmpPullRequestKind", { fg = "#232634", bg = "#ca9ee6", bold = true })
 	vim.api.nvim_set_hl(0, "OctoCmpIssueTitle", { fg = "#c6d0f5", bg = "#414559" })
 	-- Sidebar metadata labels (Reviewers, Assignees, Labels…): muted subtext
 	vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#a5adce", bold = true })
@@ -1296,6 +1360,161 @@ local function setup_timeline_visuals()
 	end
 end
 
+local function open_diffview_comment_editor(context, on_submit)
+	local bufnr = vim.api.nvim_create_buf(false, true)
+	local width = math.min(80, math.max(vim.o.columns - 8, 40))
+	local height = math.min(12, math.max(vim.o.lines - 8, 6))
+	local winid = vim.api.nvim_open_win(bufnr, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = math.floor((vim.o.lines - height) / 2) - 1,
+		col = math.floor((vim.o.columns - width) / 2),
+		style = "minimal",
+		border = "rounded",
+		title = string.format(" Comment on %s:%d-%d ", context.path, context.start_line, context.end_line),
+		title_pos = "center",
+	})
+
+	vim.bo[bufnr].filetype = "markdown"
+	vim.bo[bufnr].buftype = "acwrite"
+	vim.bo[bufnr].bufhidden = "wipe"
+	vim.api.nvim_buf_set_name(bufnr, "octo-review-comment://" .. tostring(bufnr))
+	vim.wo[winid].wrap = true
+	vim.wo[winid].linebreak = true
+
+	local function close()
+		if vim.api.nvim_win_is_valid(winid) then
+			vim.api.nvim_win_close(winid, true)
+		end
+	end
+
+	vim.keymap.set("n", "q", close, { buffer = bufnr, desc = "Cancel review comment" })
+	local function submit()
+		local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+		local body = vim.trim(table.concat(lines, "\n"))
+		if body == "" then
+			vim.notify("Review comment cannot be empty", vim.log.levels.WARN)
+			return
+		end
+		close()
+		on_submit(body)
+	end
+
+	vim.api.nvim_create_autocmd("BufWriteCmd", {
+		buffer = bufnr,
+		callback = submit,
+	})
+	vim.keymap.set({ "n", "i" }, "<C-s>", submit, { buffer = bufnr, desc = "Post review comment" })
+
+	vim.api.nvim_buf_set_extmark(bufnr, vim.api.nvim_create_namespace("OctoDiffviewCommentHelp"), 0, 0, {
+		virt_text = { { "  :w post · q cancel", "Comment" } },
+		virt_text_pos = "right_align",
+	})
+	vim.cmd("startinsert")
+end
+
+local function post_diffview_review_comment(context, body)
+	local gh = require("octo.gh")
+	local fields = {
+		body = body,
+		commit_id = context.commit_id,
+		path = context.path,
+		side = context.side,
+	}
+	local typed_fields = { line = context.end_line }
+	if context.start_line ~= context.end_line then
+		fields.start_side = context.side
+		typed_fields.start_line = context.start_line
+	end
+
+	gh.api.post({
+		"repos/{repo}/pulls/{pull_number}/comments",
+		format = {
+			repo = context.repo,
+			pull_number = context.number,
+		},
+		f = fields,
+		F = typed_fields,
+		opts = {
+			cb = gh.create_callback({
+				success = function()
+					vim.notify("Posted GitHub review comment", vim.log.levels.INFO)
+				end,
+				failure = function(message)
+					vim.notify("Could not post review comment: " .. vim.trim(message), vim.log.levels.ERROR)
+				end,
+			}),
+		},
+	})
+end
+
+local function add_diffview_review_comment()
+	local view = require("diffview.lib").get_current_view()
+	local pr_context = view and view.octo_pr_context
+	local entry = view and view.cur_entry
+	local layout = view and view.cur_layout
+	if not pr_context or not entry or not layout then
+		vim.notify("This Diffview was not opened from an Octo PR", vim.log.levels.WARN)
+		return
+	end
+
+	local current_win = vim.api.nvim_get_current_win()
+	local side, path
+	if layout.a and layout.a.id == current_win then
+		side = "LEFT"
+		path = is_present(entry.oldpath) and entry.oldpath or entry.path
+	elseif layout.b and layout.b.id == current_win then
+		side = "RIGHT"
+		path = entry.path
+	else
+		vim.notify("Select lines in a Diffview file window first", vim.log.levels.WARN)
+		return
+	end
+
+	local start_line = vim.fn.line("'<")
+	local end_line = vim.fn.line("'>")
+	if start_line > end_line then
+		start_line, end_line = end_line, start_line
+	end
+	local context = vim.tbl_extend("force", pr_context, {
+		path = path,
+		side = side,
+		start_line = start_line,
+		end_line = end_line,
+	})
+	open_diffview_comment_editor(context, function(body)
+		post_diffview_review_comment(context, body)
+	end)
+end
+
+local function set_diffview_comment_mapping(bufnr)
+	local ok, view = pcall(require("diffview.lib").get_current_view)
+	if not ok or not view or not view.octo_pr_context or not view.cur_layout then
+		return
+	end
+	local layout = view.cur_layout
+	local is_diff_buffer = (layout.a and layout.a.file and layout.a.file.bufnr == bufnr)
+		or (layout.b and layout.b.file and layout.b.file.bufnr == bufnr)
+	if not is_diff_buffer then
+		return
+	end
+	vim.keymap.set("x", "c", add_diffview_review_comment, {
+		buffer = bufnr,
+		desc = "Comment on Octo PR lines",
+		silent = true,
+	})
+end
+
+local function setup_diffview_comment_mapping()
+	vim.api.nvim_create_autocmd("BufEnter", {
+		group = vim.api.nvim_create_augroup("OctoDiffviewReviewComment", { clear = true }),
+		callback = function(event)
+			set_diffview_comment_mapping(event.buf)
+		end,
+	})
+end
+
 local function open_pr_diffview()
 	local utils = require("octo.utils")
 	local buffer = utils.get_current_buffer()
@@ -1318,6 +1537,15 @@ local function open_pr_diffview()
 	end
 
 	vim.cmd("DiffviewOpen " .. vim.fn.fnameescape(base) .. "..." .. vim.fn.fnameescape(head))
+	local view = require("diffview.lib").get_current_view()
+	if view then
+		view.octo_pr_context = {
+			repo = base_repo,
+			number = buffer.number,
+			commit_id = pr.headRefOid,
+		}
+		set_diffview_comment_mapping(vim.api.nvim_get_current_buf())
+	end
 end
 
 local function copy_current_pr_branch(branch_kind)
@@ -1669,6 +1897,8 @@ function M.setup()
 			notify_on_change = true,
 		},
 	})
+	setup_issue_completion_metadata()
+	setup_diffview_comment_mapping()
 	setup_pr_options_diffview()
 	setup_prompt_delete_branch_after_merge()
 	setup_compact_octo_details()
