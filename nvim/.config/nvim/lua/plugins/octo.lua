@@ -1472,8 +1472,11 @@ local function add_diffview_review_comment()
 		return
 	end
 
-	local start_line = vim.fn.line("'<")
-	local end_line = vim.fn.line("'>")
+	-- The '< and '> marks are only finalized after Visual mode exits. Reading
+	-- them from a visual-mode mapping makes the first comment use an empty or
+	-- stale range, which GitHub rejects with HTTP 422.
+	local start_line = vim.fn.line("v")
+	local end_line = vim.api.nvim_win_get_cursor(0)[1]
 	if start_line > end_line then
 		start_line, end_line = end_line, start_line
 	end
