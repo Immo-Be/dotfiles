@@ -245,6 +245,10 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoCmpIssueTitle", { fg = "#c6d0f5", bg = "#414559" })
 	vim.api.nvim_set_hl(0, "OctoDiffviewCommentedLine", { bg = "#36415a" })
 	vim.api.nvim_set_hl(0, "OctoDiffviewCommentedNumber", { fg = "#99d1db", bold = true })
+	vim.api.nvim_set_hl(0, "OctoDiffviewContextHeader", { fg = "#c6d0f5", bg = "#414559", bold = true })
+	vim.api.nvim_set_hl(0, "OctoDiffviewContextLine", { fg = "#838ba7", bg = "#303446" })
+	vim.api.nvim_set_hl(0, "OctoDiffviewContextLeft", { fg = "#e78284", bg = "#49313c", bold = true })
+	vim.api.nvim_set_hl(0, "OctoDiffviewContextRight", { fg = "#a6d189", bg = "#30473f", bold = true })
 	-- Sidebar metadata labels (Reviewers, Assignees, Labels…): muted subtext
 	vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#a5adce", bold = true })
 	-- Timestamps: dimmer than regular comment text
@@ -1368,8 +1372,9 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 	local height = math.min(12, math.max(vim.o.lines - 8, 6))
 	local title = context.editor_title_full
 		or string.format(
-			" %s on %s:%d-%d ",
+			" %s · %s · %s:%d-%d ",
 			context.editor_title or (context.is_suggestion and "Suggestion" or "Comment"),
+			context.side or "THREAD",
 			context.path,
 			context.start_line,
 			context.end_line
@@ -1422,6 +1427,28 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 		virt_text = { { "  :w post · q cancel", "Comment" } },
 		virt_text_pos = "right_align",
 	})
+	if context.diff_context and #context.diff_context > 0 then
+		local side_group = context.side == "LEFT" and "OctoDiffviewContextLeft" or "OctoDiffviewContextRight"
+		local context_lines = {
+			{
+				{ " " .. context.side .. " ", side_group },
+				{ string.format("  %s  lines %d-%d", context.path, context.start_line, context.end_line), "OctoDiffviewContextHeader" },
+			},
+		}
+		for _, item in ipairs(context.diff_context) do
+			local marker = item.selected and "▶" or " "
+			local group = item.selected and side_group or "OctoDiffviewContextLine"
+			local available_width = math.max(width - 12, 10)
+			table.insert(context_lines, {
+				{ string.format("%s %4d │ ", marker, item.line), group },
+				{ vim.fn.strcharpart(item.text, 0, available_width), group },
+			})
+		end
+		vim.api.nvim_buf_set_extmark(bufnr, vim.api.nvim_create_namespace("OctoDiffviewCommentContext"), 0, 0, {
+			virt_lines = context_lines,
+			virt_lines_above = true,
+		})
+	end
 	if context.is_suggestion then
 		vim.api.nvim_win_set_cursor(winid, { 2, 0 })
 	end
@@ -2325,6 +2352,17 @@ local function add_diffview_review_comment(is_suggestion)
 	if not valid then
 		vim.notify(validation_error, vim.log.levels.WARN)
 		return
+	end
+	local context_start = math.max(start_line - 2, 1)
+	local context_end = math.min(end_line + 2, vim.api.nvim_buf_line_count(0))
+	context.diff_context = {}
+	for index, text in ipairs(vim.api.nvim_buf_get_lines(0, context_start - 1, context_end, false)) do
+		local line_number = context_start + index - 1
+		table.insert(context.diff_context, {
+			line = line_number,
+			text = text,
+			selected = line_number >= start_line and line_number <= end_line,
+		})
 	end
 	local initial_lines = { "" }
 	if is_suggestion then
