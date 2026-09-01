@@ -1843,6 +1843,122 @@ local function commit_diffview_review_suggestion(view, comment)
 	end)
 end
 
+local function diffview_comments_at_cursor(only_mine)
+	local view = require("diffview.lib").get_current_view()
+	local entry = view and view.cur_entry
+	local layout = view and view.cur_layout
+	if not view or not view.octo_pr_context or not entry or not layout then
+		return nil, {}
+	end
+
+	local current_win = vim.api.nvim_get_current_win()
+	local side = layout.a and layout.a.id == current_win and "LEFT"
+		or layout.b and layout.b.id == current_win and "RIGHT"
+		or nil
+	local line = vim.api.nvim_win_get_cursor(0)[1]
+	local viewer = vim.g.octo_viewer
+	viewer = is_present(viewer) and viewer:lower() or nil
+	local comments = vim.tbl_filter(function(comment)
+		local login = comment.user and comment.user.login
+		local belongs_to_viewer = not only_mine or (viewer and login and login:lower() == viewer)
+		return belongs_to_viewer
+			and comment.line == line
+			and comment.side == side
+			and (comment.path == entry.path or comment.path == entry.oldpath)
+	end, view.octo_review_comments or {})
+
+	if only_mine and not viewer then
+		vim.notify("Could not determine the authenticated GitHub user", vim.log.levels.WARN)
+	elseif #comments == 0 then
+		vim.notify(
+			only_mine and "You have no GitHub review comment attached to this line"
+				or "No GitHub review comment is attached to this line",
+			vim.log.levels.INFO
+		)
+	end
+	return view, comments
+end
+
+local function choose_diffview_comment(comments, prompt, callback)
+	if #comments == 0 then
+		return
+	elseif #comments == 1 then
+		callback(comments[1])
+		return
+	end
+	vim.ui.select(comments, {
+		prompt = prompt,
+		format_item = function(comment)
+			local author = comment.user and comment.user.login or "unknown"
+			local summary = (comment.body or ""):match("[^\n]*") or ""
+			return string.format("@%s: %s", author, summary)
+		end,
+	}, function(comment)
+		if comment then
+			callback(comment)
+		end
+	end)
+end
+
+local function reply_to_diffview_thread_at_cursor()
+	local view, comments = diffview_comments_at_cursor(false)
+	choose_diffview_comment(comments, "Reply to review comment", function(comment)
+		reply_to_diffview_review_comment(view, comment)
+	end)
+end
+
+local function edit_diffview_review_comment()
+	local view, comments = diffview_comments_at_cursor(true)
+	choose_diffview_comment(comments, "Edit your review comment", function(comment)
+		local context = vim.tbl_extend("force", view.octo_pr_context, {
+			editor_title = "Edit comment",
+			path = comment.path,
+			start_line = comment.line,
+			end_line = comment.line,
+		})
+		open_diffview_comment_editor(context, vim.split(comment.body or "", "\n", { plain = true }), function(body)
+			local gh = require("octo.gh")
+			gh.api.patch({
+				"repos/{repo}/pulls/comments/{comment_id}",
+				format = { repo = context.repo, comment_id = comment.id },
+				f = { body = body },
+				opts = {
+					cb = gh.create_callback({
+						success = function()
+							vim.notify("Updated GitHub review comment", vim.log.levels.INFO)
+							refresh_diffview_review_comments(view)
+						end,
+					}),
+				},
+			})
+		end)
+	end)
+end
+
+local function delete_diffview_review_comment()
+	local view, comments = diffview_comments_at_cursor(true)
+	choose_diffview_comment(comments, "Delete your review comment", function(comment)
+		vim.ui.select({ "Cancel", "Delete comment" }, { prompt = "Permanently delete this GitHub comment?" }, function(choice)
+			if choice ~= "Delete comment" then
+				return
+			end
+			local gh = require("octo.gh")
+			gh.api.delete({
+				"repos/{repo}/pulls/comments/{comment_id}",
+				format = { repo = view.octo_pr_context.repo, comment_id = comment.id },
+				opts = {
+					cb = gh.create_callback({
+						success = function()
+							vim.notify("Deleted GitHub review comment", vim.log.levels.INFO)
+							refresh_diffview_review_comments(view)
+						end,
+					}),
+				},
+			})
+		end)
+	end)
+end
+
 local function interact_with_diffview_review_comment()
 	local view = require("diffview.lib").get_current_view()
 	local entry = view and view.cur_entry
@@ -2048,6 +2164,21 @@ local function set_diffview_comment_mapping(bufnr)
 	vim.keymap.set("n", "c", interact_with_diffview_review_comment, {
 		buffer = bufnr,
 		desc = "Interact with Octo PR comment",
+		silent = true,
+	})
+	vim.keymap.set("n", "r", reply_to_diffview_thread_at_cursor, {
+		buffer = bufnr,
+		desc = "Reply to Octo PR comment",
+		silent = true,
+	})
+	vim.keymap.set("n", "e", edit_diffview_review_comment, {
+		buffer = bufnr,
+		desc = "Edit your Octo PR comment",
+		silent = true,
+	})
+	vim.keymap.set("n", "d", delete_diffview_review_comment, {
+		buffer = bufnr,
+		desc = "Delete your Octo PR comment",
 		silent = true,
 	})
 	vim.keymap.set("x", "c", function()
