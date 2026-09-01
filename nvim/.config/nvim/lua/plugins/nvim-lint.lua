@@ -7,7 +7,6 @@ function M.setup()
 	lint.linters_by_ft = {
 		sh = { "shellcheck" },
 		bash = { "shellcheck" },
-		zsh = { "shellcheck" },
 	}
 
 	local lint_augroup = vim.api.nvim_create_augroup("lint", { clear = true })

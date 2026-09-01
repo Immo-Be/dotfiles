@@ -51,7 +51,15 @@ function M.setup()
 			"javascript.jsx",
 		},
 		settings = {
+			vtsls = {
+				autoUseWorkspaceTsdk = true,
+			},
 			typescript = {
+				tsserver = {
+					experimental = {
+						enableProjectDiagnostics = true,
+					},
+				},
 				inlayHints = {
 					includeInlayParameterNameHints = "all",
 					includeInlayVariableTypeHints = true,
