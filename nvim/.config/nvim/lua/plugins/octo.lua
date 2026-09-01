@@ -1366,6 +1366,14 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	local width = math.min(80, math.max(vim.o.columns - 8, 40))
 	local height = math.min(12, math.max(vim.o.lines - 8, 6))
+	local title = context.editor_title_full
+		or string.format(
+			" %s on %s:%d-%d ",
+			context.editor_title or (context.is_suggestion and "Suggestion" or "Comment"),
+			context.path,
+			context.start_line,
+			context.end_line
+		)
 	local winid = vim.api.nvim_open_win(bufnr, true, {
 		relative = "editor",
 		width = width,
@@ -1374,13 +1382,7 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 		col = math.floor((vim.o.columns - width) / 2),
 		style = "minimal",
 		border = "rounded",
-		title = string.format(
-			" %s on %s:%d-%d ",
-			context.editor_title or (context.is_suggestion and "Suggestion" or "Comment"),
-			context.path,
-			context.start_line,
-			context.end_line
-		),
+		title = title,
 		title_pos = "center",
 	})
 
@@ -1402,7 +1404,7 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 	local function submit()
 		local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 		local body = vim.trim(table.concat(lines, "\n"))
-		if body == "" then
+		if body == "" and not context.allow_empty then
 			vim.notify("Review comment cannot be empty", vim.log.levels.WARN)
 			return
 		end
@@ -1433,6 +1435,9 @@ local function review_comment_virtual_lines(comment)
 	local created = (comment.created_at or ""):gsub("T", " "):gsub("Z$", " UTC")
 	local reply = comment.in_reply_to_id and "↳ reply by " or "comment by "
 	local state = comment.octo_is_resolved and " · resolved" or ""
+	if comment.octo_is_pending then
+		state = state .. " · pending"
+	end
 	local reaction_text = ""
 	local reaction_icons = {
 		{ "+1", "👍" },
@@ -1526,6 +1531,9 @@ local function render_diffview_review_comments(view)
 						return (a.created_at or "") < (b.created_at or "")
 					end)
 					for _, comment in ipairs(comments) do
+						comment.octo_is_pending = view.octo_pending_review
+							and comment.pull_request_review_id == view.octo_pending_review.id
+							or false
 						local range_start = math.max(comment.start_line or line, 1)
 						local range_end = math.min(line, line_count)
 						for commented_line = range_start, range_end do
@@ -2018,7 +2026,187 @@ local function interact_with_diffview_review_comment()
 	end)
 end
 
+local function load_diffview_pending_review(view, callback)
+	local context = view.octo_pr_context
+	local gh = require("octo.gh")
+	gh.api.get({
+		"repos/{repo}/pulls/{pull_number}/reviews?per_page=100",
+		format = { repo = context.repo, pull_number = context.number },
+		opts = {
+			cb = gh.create_callback({
+				success = function(data)
+					local ok, reviews = pcall(vim.json.decode, data)
+					local viewer = is_present(vim.g.octo_viewer) and vim.g.octo_viewer:lower() or nil
+					view.octo_pending_review = nil
+					if ok then
+						for _, review in ipairs(reviews or {}) do
+							local login = review.user and review.user.login
+							if review.state == "PENDING" and viewer and login and login:lower() == viewer then
+								view.octo_pending_review = review
+								break
+							end
+						end
+					end
+					view.octo_pending_review_loaded = true
+					render_diffview_review_comments(view)
+					if callback then
+						callback(view.octo_pending_review)
+					end
+				end,
+			}),
+		},
+	})
+end
+
+local function start_diffview_pending_review(view, callback)
+	local context = view.octo_pr_context
+	local gh = require("octo.gh")
+	gh.api.post({
+		"repos/{repo}/pulls/{pull_number}/reviews",
+		format = { repo = context.repo, pull_number = context.number },
+		f = { commit_id = context.commit_id },
+		opts = {
+			cb = gh.create_callback({
+				success = function(data)
+					local ok, review = pcall(vim.json.decode, data)
+					if not ok or not review.id or not review.node_id then
+						vim.notify("GitHub created a review but returned invalid metadata", vim.log.levels.ERROR)
+						return
+					end
+					view.octo_pending_review = review
+					view.octo_pending_review_loaded = true
+					if callback then
+						callback(review)
+					end
+				end,
+			}),
+		},
+	})
+end
+
+local function submit_diffview_pending_review(view, event)
+	local review = view.octo_pending_review
+	local event_labels = {
+		APPROVE = "Approve review",
+		COMMENT = "Submit review comments",
+		REQUEST_CHANGES = "Request changes",
+	}
+	local context = vim.tbl_extend("force", view.octo_pr_context, {
+		editor_title_full = " "
+			.. event_labels[event]
+			.. (event == "REQUEST_CHANGES" and " · summary required " or " · optional summary "),
+		allow_empty = event ~= "REQUEST_CHANGES",
+	})
+	open_diffview_comment_editor(context, { "" }, function(body)
+		local gh = require("octo.gh")
+		local endpoint = review and "repos/{repo}/pulls/{pull_number}/reviews/{review_id}/events"
+			or "repos/{repo}/pulls/{pull_number}/reviews"
+		local fields = { event = event, body = body }
+		if not review then
+			fields.commit_id = context.commit_id
+		end
+		gh.api.post({
+			endpoint,
+			format = { repo = context.repo, pull_number = context.number, review_id = review and review.id or "" },
+			f = fields,
+			opts = {
+				cb = gh.create_callback({
+					success = function()
+						view.octo_pending_review = nil
+						vim.notify(event_labels[event] .. " submitted to GitHub", vim.log.levels.INFO)
+						refresh_diffview_review_comments(view)
+					end,
+				}),
+			},
+		})
+	end)
+end
+
+local function diffview_pending_review_actions()
+	local view = require("diffview.lib").get_current_view()
+	if not view or not view.octo_pr_context then
+		return
+	end
+	local function choose(review)
+		view.octo_pending_review = review
+		local actions = { "Approve", "Comment", "Request changes" }
+		vim.ui.select(actions, { prompt = "Submit PR review" }, function(action)
+			if action == "Approve" then
+				submit_diffview_pending_review(view, "APPROVE")
+			elseif action == "Comment" then
+				submit_diffview_pending_review(view, "COMMENT")
+			elseif action == "Request changes" then
+				submit_diffview_pending_review(view, "REQUEST_CHANGES")
+			end
+		end)
+	end
+
+	if view.octo_pending_review_loaded then
+		choose(view.octo_pending_review)
+	else
+		load_diffview_pending_review(view, choose)
+	end
+end
+
+local function post_pending_diffview_review_comment(context, body, review)
+	local gh = require("octo.gh")
+	local query
+	local raw_fields = {
+		query = "",
+		reviewId = review.node_id,
+		body = body,
+		path = context.path,
+		side = context.side,
+	}
+	local typed_fields = { line = context.end_line }
+	if context.start_line ~= context.end_line then
+		query = [[
+mutation($reviewId: ID!, $body: String!, $path: String!, $line: Int!, $side: DiffSide!, $startLine: Int!, $startSide: DiffSide!) {
+  addPullRequestReviewThread(input: {pullRequestReviewId: $reviewId, body: $body, path: $path, line: $line, side: $side, startLine: $startLine, startSide: $startSide}) { thread { id } }
+}
+]]
+		typed_fields.startLine = context.start_line
+		raw_fields.startSide = context.side
+	else
+		query = [[
+mutation($reviewId: ID!, $body: String!, $path: String!, $line: Int!, $side: DiffSide!) {
+  addPullRequestReviewThread(input: {pullRequestReviewId: $reviewId, body: $body, path: $path, line: $line, side: $side}) { thread { id } }
+}
+]]
+	end
+	raw_fields.query = query
+	gh.api.graphql({
+		f = raw_fields,
+		F = typed_fields,
+		opts = {
+			cb = gh.create_callback({
+				success = function()
+					vim.notify("Added comment to pending GitHub review", vim.log.levels.INFO)
+					refresh_diffview_review_comments(context.diffview)
+				end,
+			}),
+		},
+	})
+end
+
 local function post_diffview_review_comment(context, body)
+	if context.diffview and not context.diffview.octo_pending_review_loaded then
+		load_diffview_pending_review(context.diffview, function()
+			post_diffview_review_comment(context, body)
+		end)
+		return
+	end
+	local pending_review = context.diffview and context.diffview.octo_pending_review
+	if pending_review then
+		post_pending_diffview_review_comment(context, body, pending_review)
+		return
+	end
+	if context.diffview then
+		start_diffview_pending_review(context.diffview, function(review)
+			post_pending_diffview_review_comment(context, body, review)
+		end)
+		return
+	end
 	local gh = require("octo.gh")
 	local fields = {
 		body = body,
@@ -2181,6 +2369,11 @@ local function set_diffview_comment_mapping(bufnr)
 		desc = "Delete your Octo PR comment",
 		silent = true,
 	})
+	vim.keymap.set("n", "p", diffview_pending_review_actions, {
+		buffer = bufnr,
+		desc = "Manage pending Octo PR review",
+		silent = true,
+	})
 	vim.keymap.set("x", "c", function()
 		add_diffview_review_comment(false)
 	end, {
@@ -2241,6 +2434,7 @@ local function open_pr_diffview()
 			git_root = git_stdout({ "rev-parse", "--show-toplevel" }),
 		}
 		set_diffview_comment_mapping(vim.api.nvim_get_current_buf())
+		load_diffview_pending_review(view)
 		refresh_diffview_review_comments(view)
 	end
 end
