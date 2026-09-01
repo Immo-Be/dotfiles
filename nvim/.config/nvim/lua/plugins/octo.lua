@@ -1424,6 +1424,124 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 	vim.cmd("startinsert")
 end
 
+local diffview_comments_ns = vim.api.nvim_create_namespace("OctoDiffviewReviewComments")
+
+local function review_comment_virtual_lines(comment)
+	local author = comment.user and comment.user.login or "unknown"
+	local created = (comment.created_at or ""):gsub("T", " "):gsub("Z$", " UTC")
+	local reply = comment.in_reply_to_id and "↳ reply by " or "comment by "
+	local lines = {
+		{
+			{ "╭─ ", "OctoThreadBorder" },
+			{ reply .. author, "OctoUser" },
+			{ created ~= "" and " · " .. created or "", "OctoDate" },
+		},
+	}
+	local body_lines = vim.split(comment.body or "", "\n", { plain = true })
+	if #body_lines == 0 then
+		body_lines = { "" }
+	end
+	for _, line in ipairs(body_lines) do
+		table.insert(lines, {
+			{ "│  ", "OctoThreadRail" },
+			{ line, "OctoThreadBodyLine" },
+		})
+	end
+	if comment.html_url then
+		table.insert(lines, {
+			{ "╰─ ", "OctoThreadBorder" },
+			{ comment.html_url, "OctoMarkdownUrl" },
+		})
+	else
+		table.insert(lines, { { "╰─", "OctoThreadBorder" } })
+	end
+	return lines
+end
+
+local function render_diffview_review_comments(view)
+	if not view or not view.octo_pr_context or not view.cur_entry or not view.cur_layout then
+		return
+	end
+
+	local entry = view.cur_entry
+	local layout = view.cur_layout
+	for _, window in ipairs({ layout.a, layout.b }) do
+		local bufnr = window and window.file and window.file.bufnr
+		if bufnr and vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+			vim.api.nvim_buf_clear_namespace(bufnr, diffview_comments_ns, 0, -1)
+		end
+	end
+
+	local comments_by_buffer = {}
+	for _, comment in ipairs(view.octo_review_comments or {}) do
+		local path_matches = comment.path == entry.path or comment.path == entry.oldpath
+		local window = comment.side == "LEFT" and layout.a or comment.side == "RIGHT" and layout.b or nil
+		local bufnr = window and window.file and window.file.bufnr
+		-- GitHub sets `line` to null when a comment is outdated. Its
+		-- `original_line` belongs to an older commit and must not be anchored to
+		-- the current Diffview, where it could point at unrelated code.
+		local line = comment.line
+		if path_matches and bufnr and line then
+			comments_by_buffer[bufnr] = comments_by_buffer[bufnr] or {}
+			comments_by_buffer[bufnr][line] = comments_by_buffer[bufnr][line] or {}
+			table.insert(comments_by_buffer[bufnr][line], comment)
+		end
+	end
+
+	for bufnr, comments_by_line in pairs(comments_by_buffer) do
+		if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+			local line_count = vim.api.nvim_buf_line_count(bufnr)
+			for line, comments in pairs(comments_by_line) do
+				if line > 0 and line <= line_count then
+					local virtual_lines = {}
+					table.sort(comments, function(a, b)
+						return (a.created_at or "") < (b.created_at or "")
+					end)
+					for _, comment in ipairs(comments) do
+						vim.list_extend(virtual_lines, review_comment_virtual_lines(comment))
+					end
+					vim.api.nvim_buf_set_extmark(bufnr, diffview_comments_ns, line - 1, 0, {
+						virt_lines = virtual_lines,
+						priority = 30,
+					})
+				end
+			end
+		end
+	end
+end
+
+local function refresh_diffview_review_comments(view)
+	if not view or not view.octo_pr_context then
+		return
+	end
+	local context = view.octo_pr_context
+	require("octo.gh").api.get({
+		"repos/{repo}/pulls/{pull_number}/comments?per_page=100",
+		format = { repo = context.repo, pull_number = context.number },
+		paginate = true,
+		slurp = true,
+		opts = {
+			cb = require("octo.gh").create_callback({
+				success = function(data)
+					local ok, pages = pcall(vim.json.decode, data)
+					if not ok then
+						vim.notify("Could not decode GitHub review comments", vim.log.levels.ERROR)
+						return
+					end
+					local comments = {}
+					for _, page in ipairs(pages or {}) do
+						if vim.islist(page) then
+							vim.list_extend(comments, page)
+						end
+					end
+					view.octo_review_comments = comments
+					render_diffview_review_comments(view)
+				end,
+			}),
+		},
+	})
+end
+
 local function post_diffview_review_comment(context, body)
 	local gh = require("octo.gh")
 	local fields = {
@@ -1450,6 +1568,7 @@ local function post_diffview_review_comment(context, body)
 			cb = gh.create_callback({
 				success = function()
 					vim.notify("Posted GitHub review comment", vim.log.levels.INFO)
+					refresh_diffview_review_comments(context.diffview)
 				end,
 				failure = function(message)
 					vim.notify("Could not post review comment: " .. vim.trim(message), vim.log.levels.ERROR)
@@ -1530,6 +1649,7 @@ local function add_diffview_review_comment(is_suggestion)
 		start_line, end_line = end_line, start_line
 	end
 	local context = vim.tbl_extend("force", pr_context, {
+		diffview = view,
 		path = path,
 		other_path = side == "LEFT" and entry.path or entry.oldpath,
 		side = side,
@@ -1564,6 +1684,7 @@ local function set_diffview_comment_mapping(bufnr)
 	if not is_diff_buffer then
 		return
 	end
+	render_diffview_review_comments(view)
 	vim.keymap.set("x", "c", function()
 		add_diffview_review_comment(false)
 	end, {
@@ -1622,6 +1743,7 @@ local function open_pr_diffview()
 			git_root = git_stdout({ "rev-parse", "--show-toplevel" }),
 		}
 		set_diffview_comment_mapping(vim.api.nvim_get_current_buf())
+		refresh_diffview_review_comments(view)
 	end
 end
 
