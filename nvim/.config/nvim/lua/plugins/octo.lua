@@ -243,6 +243,8 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoCmpIssueKind", { fg = "#232634", bg = "#8caaee", bold = true })
 	vim.api.nvim_set_hl(0, "OctoCmpPullRequestKind", { fg = "#232634", bg = "#ca9ee6", bold = true })
 	vim.api.nvim_set_hl(0, "OctoCmpIssueTitle", { fg = "#c6d0f5", bg = "#414559" })
+	vim.api.nvim_set_hl(0, "OctoDiffviewCommentedLine", { bg = "#36415a" })
+	vim.api.nvim_set_hl(0, "OctoDiffviewCommentedNumber", { fg = "#99d1db", bold = true })
 	-- Sidebar metadata labels (Reviewers, Assignees, Labels…): muted subtext
 	vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#a5adce", bold = true })
 	-- Timestamps: dimmer than regular comment text
@@ -1516,6 +1518,7 @@ local function render_diffview_review_comments(view)
 	for bufnr, comments_by_line in pairs(comments_by_buffer) do
 		if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
 			local line_count = vim.api.nvim_buf_line_count(bufnr)
+			local highlighted_lines = {}
 			for line, comments in pairs(comments_by_line) do
 				if line > 0 and line <= line_count then
 					local virtual_lines = {}
@@ -1523,6 +1526,20 @@ local function render_diffview_review_comments(view)
 						return (a.created_at or "") < (b.created_at or "")
 					end)
 					for _, comment in ipairs(comments) do
+						local range_start = math.max(comment.start_line or line, 1)
+						local range_end = math.min(line, line_count)
+						for commented_line = range_start, range_end do
+							if not highlighted_lines[commented_line] then
+								highlighted_lines[commented_line] = true
+								vim.api.nvim_buf_set_extmark(bufnr, diffview_comments_ns, commented_line - 1, 0, {
+									line_hl_group = "OctoDiffviewCommentedLine",
+									number_hl_group = "OctoDiffviewCommentedNumber",
+									sign_text = commented_line == range_start and "●" or nil,
+									sign_hl_group = "OctoDiffviewCommentedNumber",
+									priority = 20,
+								})
+							end
+						end
 						vim.list_extend(virtual_lines, review_comment_virtual_lines(comment))
 					end
 					vim.api.nvim_buf_set_extmark(bufnr, diffview_comments_ns, line - 1, 0, {
