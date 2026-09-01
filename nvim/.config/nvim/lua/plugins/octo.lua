@@ -1459,6 +1459,45 @@ local function post_diffview_review_comment(context, body)
 	})
 end
 
+local function selection_is_in_diff_hunk(context)
+	if not is_present(context.base_ref) or not is_present(context.head_ref) then
+		return false, "Reopen this PR Diffview so its review context can be refreshed"
+	end
+	local args = {
+		"git",
+		"diff",
+		"--no-ext-diff",
+		"--unified=3",
+		context.base_ref .. "..." .. context.head_ref,
+		"--",
+		context.path,
+	}
+	if is_present(context.other_path) and context.other_path ~= context.path then
+		table.insert(args, context.other_path)
+	end
+
+	local result = vim.system(args, { text = true, cwd = context.git_root }):wait()
+	if result.code ~= 0 then
+		return false, "Could not inspect the PR diff: " .. vim.trim(result.stderr or "git diff failed")
+	end
+
+	for header in (result.stdout or ""):gmatch("[^\n]+") do
+		local left_start, left_count, right_start, right_count =
+			header:match("^@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@")
+		if left_start then
+			local hunk_start = tonumber(context.side == "LEFT" and left_start or right_start)
+			local count_text = context.side == "LEFT" and left_count or right_count
+			local hunk_count = count_text == "" and 1 or tonumber(count_text)
+			local hunk_end = hunk_start + hunk_count - 1
+			if hunk_count > 0 and context.start_line >= hunk_start and context.end_line <= hunk_end then
+				return true
+			end
+		end
+	end
+
+	return false, "GitHub cannot attach a review comment to this selection; select lines within one diff hunk"
+end
+
 local function add_diffview_review_comment(is_suggestion)
 	local view = require("diffview.lib").get_current_view()
 	local pr_context = view and view.octo_pr_context
@@ -1492,11 +1531,17 @@ local function add_diffview_review_comment(is_suggestion)
 	end
 	local context = vim.tbl_extend("force", pr_context, {
 		path = path,
+		other_path = side == "LEFT" and entry.path or entry.oldpath,
 		side = side,
 		start_line = start_line,
 		end_line = end_line,
 		is_suggestion = is_suggestion,
 	})
+	local valid, validation_error = selection_is_in_diff_hunk(context)
+	if not valid then
+		vim.notify(validation_error, vim.log.levels.WARN)
+		return
+	end
 	local initial_lines = { "" }
 	if is_suggestion then
 		initial_lines = { "```suggestion" }
@@ -1572,6 +1617,9 @@ local function open_pr_diffview()
 			repo = base_repo,
 			number = buffer.number,
 			commit_id = pr.headRefOid,
+			base_ref = base,
+			head_ref = head,
+			git_root = git_stdout({ "rev-parse", "--show-toplevel" }),
 		}
 		set_diffview_comment_mapping(vim.api.nvim_get_current_buf())
 	end
