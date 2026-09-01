@@ -253,14 +253,8 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#a5adce", bold = true })
 	-- Timestamps: dimmer than regular comment text
 	vim.api.nvim_set_hl(0, "OctoDate", { fg = "#737994", italic = true })
-	-- Timeline event lines: make review/thread boundaries easy to scan
-	vim.api.nvim_set_hl(0, "OctoTimelineItemHeading", { fg = "#e5c890", bold = true })
-	vim.api.nvim_set_hl(0, "OctoTimelineMarker", { fg = "#8caaee", bold = true })
-	vim.api.nvim_set_hl(0, "OctoFoldMarker", { fg = "#c6d0f5", bold = true })
 	-- Separator/symbol glyphs between metadata items
 	vim.api.nvim_set_hl(0, "OctoSymbol", { fg = "#626880" })
-	-- Editable regions: faint surface tint so input areas read as "writable"
-	vim.api.nvim_set_hl(0, "OctoEditable", { bg = "#414559" })
 	vim.api.nvim_set_hl(0, "OctoOverviewAccent", { fg = "#a6d189", bold = true })
 	vim.api.nvim_set_hl(0, "OctoOverviewMuted", { fg = "#838ba7" })
 	vim.api.nvim_set_hl(0, "OctoOverviewDivider", { fg = "#51576d" })
@@ -2825,11 +2819,6 @@ function M.setup()
 			blue        = "#8caaee", -- frappe: blue    (replaces #58A6FF)
 		},
 
-		-- ── Timeline ─────────────────────────────────────────────────────────
-		use_timeline_icons = true,
-		timeline_indent    = 6, -- Increased to 6 for dramatic visual hierarchy like GitHub
-		timeline_marker    = "┃", -- Thicker marker for better visibility
-
 		-- ── Changed-files panel ───────────────────────────────────────────────
 		file_panel = {
 			size  = 10,
@@ -2848,7 +2837,6 @@ function M.setup()
 	setup_pr_options_diffview()
 	setup_prompt_delete_branch_after_merge()
 	setup_compact_octo_details()
-	setup_timeline_visuals()
 	setup_cmp_completion()
 
 	vim.keymap.set("n", "<leader>Ha", octo("actions"), { desc = "Octo actions", silent = true })
