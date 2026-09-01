@@ -1,0 +1,3 @@
+[submodule "herdr/.config/herdr/plugins/vim-herdr-navigation"]
+	path = herdr/.config/herdr/plugins/vim-herdr-navigation
+	url = https://github.com/paulbkim-dev/vim-herdr-navigation.git

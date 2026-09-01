@@ -1,3 +1,6 @@
 *.log
 *.sock
 session.json
+release-notes.json
+plugins.json
+plugins/config/
