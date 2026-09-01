@@ -12,6 +12,10 @@ function M.setup()
 	})
 
 	vim.keymap.set("n", "<leader>dh", ":DiffviewFileHistory %<CR>", { desc = "File History (current file)" })
+	vim.keymap.set("n", "<leader>dv", "<cmd>DiffviewOpen origin/develop..HEAD<CR>", {
+		desc = "Diff against origin/develop",
+		silent = true,
+	})
 	vim.keymap.set("v", "<leader>dh", function()
 		local start_line = vim.fn.line("'<")
 		local end_line = vim.fn.line("'>")
