@@ -1716,6 +1716,116 @@ local function resolve_diffview_review_thread(view, comment)
 	})
 end
 
+local function suggestion_text(comment)
+	local body = (comment.body or ""):gsub("\r\n", "\n")
+	return body:match("```suggestion[^\n]*\n(.-)\n```")
+end
+
+local function commit_diffview_review_suggestion(view, comment)
+	local replacement = suggestion_text(comment)
+	local context = view.octo_pr_context
+	if replacement == nil then
+		vim.notify("This review comment does not contain a GitHub suggestion", vim.log.levels.WARN)
+		return
+	end
+	if not is_present(context.head_repo) or not is_present(context.head_branch) then
+		vim.notify("Reopen this PR Diffview so its head-branch context can be refreshed", vim.log.levels.WARN)
+		return
+	end
+
+	local first_line = comment.start_line or comment.line
+	local last_line = comment.line
+	if not first_line or not last_line then
+		vim.notify("This suggestion is outdated and can no longer be committed", vim.log.levels.WARN)
+		return
+	end
+
+	local author = comment.user and comment.user.login or "reviewer"
+	vim.ui.input({
+		prompt = "Suggestion commit message: ",
+		default = "Apply suggestion from @" .. author,
+	}, function(message)
+		message = message and vim.trim(message) or ""
+		if message == "" then
+			return
+		end
+
+		local gh = require("octo.gh")
+		gh.api.get({
+			"repos/{repo}/contents/{path}",
+			format = { repo = context.head_repo, path = comment.path },
+			f = { ref = context.head_branch },
+			opts = {
+				cb = gh.create_callback({
+					success = function(data)
+						local ok, file = pcall(vim.json.decode, data)
+						if not ok or not file.content or not file.sha then
+							vim.notify("Could not read the PR head file from GitHub", vim.log.levels.ERROR)
+							return
+						end
+
+						local blob_result = vim.system(
+							{ "git", "rev-parse", context.head_ref .. ":" .. comment.path },
+							{ text = true, cwd = context.git_root }
+						):wait()
+						local local_blob = blob_result.code == 0 and vim.trim(blob_result.stdout or "") or nil
+						if not local_blob or local_blob ~= file.sha then
+							vim.notify(
+								"The PR branch changed since this Diffview opened; reopen it before committing the suggestion",
+								vim.log.levels.WARN
+							)
+							return
+						end
+
+						local content = vim.base64.decode((file.content:gsub("%s", "")))
+						local lines = vim.split(content, "\n", { plain = true })
+						if first_line < 1 or last_line > #lines or first_line > last_line then
+							vim.notify("The suggestion range no longer exists on the PR branch", vim.log.levels.WARN)
+							return
+						end
+
+						local replacement_lines = replacement == "" and {} or vim.split(replacement, "\n", { plain = true })
+						local updated = {}
+						vim.list_extend(updated, vim.list_slice(lines, 1, first_line - 1))
+						vim.list_extend(updated, replacement_lines)
+						vim.list_extend(updated, vim.list_slice(lines, last_line + 1))
+
+						gh.api.put({
+							"repos/{repo}/contents/{path}",
+							format = { repo = context.head_repo, path = comment.path },
+							f = {
+								message = message,
+								content = vim.base64.encode(table.concat(updated, "\n")),
+								branch = context.head_branch,
+								sha = file.sha,
+							},
+							opts = {
+								cb = gh.create_callback({
+									success = function()
+										vim.notify(
+											"Committed suggestion to "
+												.. context.head_repo
+												.. ":"
+												.. context.head_branch
+												.. "; reopen Diffview to see the new commit",
+											vim.log.levels.INFO
+										)
+										if comment.octo_thread_id and not comment.octo_is_resolved then
+											resolve_diffview_review_thread(view, comment)
+										else
+											refresh_diffview_review_comments(view)
+										end
+									end,
+								}),
+							},
+						})
+					end,
+				}),
+			},
+		})
+	end)
+end
+
 local function interact_with_diffview_review_comment()
 	local view = require("diffview.lib").get_current_view()
 	local entry = view and view.cur_entry
@@ -1740,8 +1850,14 @@ local function interact_with_diffview_review_comment()
 	end
 
 	local function choose_action(comment)
-		vim.ui.select({ "React", "Reply", "Resolve thread" }, { prompt = "Review comment action" }, function(action)
-			if action == "React" then
+		local actions = { "React", "Reply", "Resolve thread" }
+		if suggestion_text(comment) ~= nil then
+			table.insert(actions, 1, "Commit suggestion")
+		end
+		vim.ui.select(actions, { prompt = "Review comment action" }, function(action)
+			if action == "Commit suggestion" then
+				commit_diffview_review_suggestion(view, comment)
+			elseif action == "React" then
 				react_to_diffview_review_comment(view, comment)
 			elseif action == "Reply" then
 				reply_to_diffview_review_comment(view, comment)
@@ -1968,6 +2084,8 @@ local function open_pr_diffview()
 	if view then
 		view.octo_pr_context = {
 			repo = base_repo,
+			head_repo = head_repo,
+			head_branch = pr.headRefName,
 			number = buffer.number,
 			commit_id = pr.headRefOid,
 			base_ref = base,
