@@ -148,6 +148,7 @@ local setup_modules = {
 	"plugins.mini-library",
 	"plugins.oil",
 	"plugins.neo-tree",
+	"plugins.fzf-lua",
 	"plugins.telescope",
 	"plugins.snippets",
 	"plugins.autopairs",
