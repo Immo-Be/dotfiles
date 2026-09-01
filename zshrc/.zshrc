@@ -51,7 +51,7 @@
 
 ##### Homebrew prefix (Apple Silicon)
 HOMEBREW_PREFIX="/opt/homebrew"
-export PATH="$HOMEBREW_PREFIX/bin:$PATH"
+export PATH="$HOME/dotfiles/scripts:$HOMEBREW_PREFIX/bin:$PATH"
 
 ##### Oh My Zsh + theme
 export ZSH="$HOME/.oh-my-zsh"
@@ -136,6 +136,108 @@ alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
 alias ll="ls -lah"
+
+# Create a Git worktree and open it in a new tmux window.
+# Usage: wt <branch> [base]
+wt() {
+  local branch="$1"
+  local base="${2:-HEAD}"
+  local common_dir repo_root repo_name worktrees_dir worktree_dir window_name
+
+  if [[ -z "$branch" ]]; then
+    echo "Usage: wt <branch> [base]"
+    return 2
+  fi
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "wt: not inside a Git repository"
+    return 1
+  fi
+
+  if ! git check-ref-format --branch "$branch" >/dev/null 2>&1; then
+    echo "wt: invalid branch name: $branch"
+    return 1
+  fi
+
+  # --git-common-dir points back to the primary checkout, even when wt is
+  # invoked from another worktree.
+  common_dir="$(git rev-parse --path-format=absolute --git-common-dir)" || return 1
+  repo_root="${common_dir:h}"
+  repo_name="${repo_root:t}"
+  worktrees_dir="${repo_root:h}/${repo_name}.worktrees"
+  worktree_dir="${worktrees_dir}/${branch//\//-}"
+
+  if [[ -e "$worktree_dir" ]]; then
+    echo "wt: path already exists: $worktree_dir"
+    return 1
+  fi
+
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git worktree add "$worktree_dir" "$branch" || return 1
+  else
+    git worktree add -b "$branch" "$worktree_dir" "$base" || return 1
+  fi
+
+  window_name="${branch//\//-}"
+  if [[ -n "$TMUX" ]]; then
+    tmux new-window -c "$worktree_dir" -n "$window_name"
+  else
+    echo "wt: not inside tmux; entering $worktree_dir"
+    cd "$worktree_dir"
+  fi
+}
+
+# Remove a Git worktree while keeping its branch.
+# Usage: wtrm [branch]
+wtrm() {
+  local branch="$1"
+  local current_root primary_root target line candidate
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "wtrm: not inside a Git repository"
+    return 1
+  fi
+
+  current_root="$(git rev-parse --show-toplevel)" || return 1
+  primary_root="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+
+  if [[ -z "$branch" ]]; then
+    target="$current_root"
+  else
+    candidate=""
+    while IFS= read -r line; do
+      case "$line" in
+        "worktree "*) candidate="${line#worktree }" ;;
+        "branch refs/heads/$branch") target="$candidate"; break ;;
+      esac
+    done < <(git worktree list --porcelain)
+
+    if [[ -z "$target" ]]; then
+      echo "wtrm: no worktree found for branch: $branch"
+      return 1
+    fi
+  fi
+
+  if [[ "$target" == "$primary_root" ]]; then
+    echo "wtrm: refusing to remove the primary worktree"
+    return 1
+  fi
+
+  # Git refuses by default when the worktree contains uncommitted changes.
+  git -C "$primary_root" worktree remove "$target" || return 1
+
+  if [[ "$target" == "$current_root" ]]; then
+    if [[ -n "$TMUX" ]]; then
+      tmux display-message "Removed worktree; branch kept"
+      tmux kill-window
+    else
+      cd "$primary_root"
+      echo "wtrm: removed worktree and entered $primary_root (branch kept)"
+    fi
+  else
+    echo "wtrm: removed $target (branch kept)"
+  fi
+}
 
 
 
