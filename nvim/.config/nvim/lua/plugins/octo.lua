@@ -1374,7 +1374,7 @@ local function open_diffview_comment_editor(context, initial_lines, on_submit)
 		border = "rounded",
 		title = string.format(
 			" %s on %s:%d-%d ",
-			context.is_suggestion and "Suggestion" or "Comment",
+			context.editor_title or (context.is_suggestion and "Suggestion" or "Comment"),
 			context.path,
 			context.start_line,
 			context.end_line
@@ -1430,11 +1430,30 @@ local function review_comment_virtual_lines(comment)
 	local author = comment.user and comment.user.login or "unknown"
 	local created = (comment.created_at or ""):gsub("T", " "):gsub("Z$", " UTC")
 	local reply = comment.in_reply_to_id and "↳ reply by " or "comment by "
+	local state = comment.octo_is_resolved and " · resolved" or ""
+	local reaction_text = ""
+	local reaction_icons = {
+		{ "+1", "👍" },
+		{ "-1", "👎" },
+		{ "laugh", "😄" },
+		{ "hooray", "🎉" },
+		{ "confused", "😕" },
+		{ "heart", "❤️" },
+		{ "rocket", "🚀" },
+		{ "eyes", "👀" },
+	}
+	for _, reaction in ipairs(reaction_icons) do
+		local name, icon = unpack(reaction)
+		local count = comment.reactions and comment.reactions[name] or 0
+		if count > 0 then
+			reaction_text = reaction_text .. string.format("  %s %d", icon, count)
+		end
+	end
 	local lines = {
 		{
 			{ "╭─ ", "OctoThreadBorder" },
 			{ reply .. author, "OctoUser" },
-			{ created ~= "" and " · " .. created or "", "OctoDate" },
+			{ (created ~= "" and " · " .. created or "") .. state, "OctoDate" },
 		},
 	}
 	local body_lines = vim.split(comment.body or "", "\n", { plain = true })
@@ -1445,6 +1464,12 @@ local function review_comment_virtual_lines(comment)
 		table.insert(lines, {
 			{ "│  ", "OctoThreadRail" },
 			{ line, "OctoThreadBodyLine" },
+		})
+	end
+	if reaction_text ~= "" then
+		table.insert(lines, {
+			{ "│ ", "OctoThreadRail" },
+			{ reaction_text, "OctoOverviewMuted" },
 		})
 	end
 	if comment.html_url then
@@ -1510,6 +1535,61 @@ local function render_diffview_review_comments(view)
 	end
 end
 
+local function add_review_thread_metadata(view, comments, on_complete)
+	local context = view.octo_pr_context
+	local owner, name = require("octo.utils").split_repo(context.repo)
+	local query = [[
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 100) { nodes { databaseId } }
+        }
+      }
+    }
+  }
+}
+]]
+	local gh = require("octo.gh")
+	gh.api.graphql({
+		query = query,
+		F = { owner = owner, name = name, number = context.number },
+		opts = {
+			cb = gh.create_callback({
+				success = function(data)
+					local ok, response = pcall(vim.json.decode, data)
+					local threads = ok
+						and vim.tbl_get(response, "data", "repository", "pullRequest", "reviewThreads", "nodes")
+						or {}
+					local metadata = {}
+					for _, thread in ipairs(threads or {}) do
+						for _, thread_comment in ipairs(vim.tbl_get(thread, "comments", "nodes") or {}) do
+							metadata[thread_comment.databaseId] = {
+								thread_id = thread.id,
+								is_resolved = thread.isResolved,
+							}
+						end
+					end
+					for _, comment in ipairs(comments) do
+						local item = metadata[comment.id]
+						if item then
+							comment.octo_thread_id = item.thread_id
+							comment.octo_is_resolved = item.is_resolved
+						end
+					end
+					on_complete()
+				end,
+				failure = function()
+					on_complete()
+				end,
+			}),
+		},
+	})
+end
+
 local function refresh_diffview_review_comments(view)
 	if not view or not view.octo_pr_context then
 		return
@@ -1534,12 +1614,159 @@ local function refresh_diffview_review_comments(view)
 							vim.list_extend(comments, page)
 						end
 					end
-					view.octo_review_comments = comments
-					render_diffview_review_comments(view)
+					add_review_thread_metadata(view, comments, function()
+						view.octo_review_comments = comments
+						render_diffview_review_comments(view)
+					end)
 				end,
 			}),
 		},
 	})
+end
+
+local function reply_to_diffview_review_comment(view, comment)
+	local context = vim.tbl_extend("force", view.octo_pr_context, {
+		diffview = view,
+		editor_title = "Reply",
+		path = comment.path,
+		start_line = comment.line,
+		end_line = comment.line,
+	})
+	open_diffview_comment_editor(context, { "" }, function(body)
+		local gh = require("octo.gh")
+		gh.api.post({
+			"repos/{repo}/pulls/{pull_number}/comments/{comment_id}/replies",
+			format = {
+				repo = context.repo,
+				pull_number = context.number,
+				comment_id = comment.in_reply_to_id or comment.id,
+			},
+			f = { body = body },
+			opts = {
+				cb = gh.create_callback({
+					success = function()
+						vim.notify("Posted GitHub review reply", vim.log.levels.INFO)
+						refresh_diffview_review_comments(view)
+					end,
+				}),
+			},
+		})
+	end)
+end
+
+local function react_to_diffview_review_comment(view, comment)
+	local reactions = {
+		{ label = "👍  Thumbs up", value = "+1" },
+		{ label = "👎  Thumbs down", value = "-1" },
+		{ label = "😄  Laugh", value = "laugh" },
+		{ label = "🎉  Hooray", value = "hooray" },
+		{ label = "😕  Confused", value = "confused" },
+		{ label = "❤️  Heart", value = "heart" },
+		{ label = "🚀  Rocket", value = "rocket" },
+		{ label = "👀  Eyes", value = "eyes" },
+	}
+	vim.ui.select(reactions, {
+		prompt = "Send reaction",
+		format_item = function(item)
+			return item.label
+		end,
+	}, function(reaction)
+		if not reaction then
+			return
+		end
+		local gh = require("octo.gh")
+		gh.api.post({
+			"repos/{repo}/pulls/comments/{comment_id}/reactions",
+			format = { repo = view.octo_pr_context.repo, comment_id = comment.id },
+			f = { content = reaction.value },
+			opts = {
+				cb = gh.create_callback({
+					success = function()
+						vim.notify("Added reaction " .. reaction.label:match("^%S+"), vim.log.levels.INFO)
+						refresh_diffview_review_comments(view)
+					end,
+				}),
+			},
+		})
+	end)
+end
+
+local function resolve_diffview_review_thread(view, comment)
+	if not comment.octo_thread_id then
+		vim.notify("Could not find the GitHub review thread for this comment", vim.log.levels.WARN)
+		return
+	end
+	if comment.octo_is_resolved then
+		vim.notify("This review thread is already resolved", vim.log.levels.INFO)
+		return
+	end
+
+	local gh = require("octo.gh")
+	local query = require("octo.gh.graphql")("resolve_review_thread_mutation", comment.octo_thread_id)
+	gh.api.graphql({
+		f = { query = query },
+		opts = {
+			cb = gh.create_callback({
+				success = function()
+					vim.notify("Resolved GitHub review thread", vim.log.levels.INFO)
+					refresh_diffview_review_comments(view)
+				end,
+			}),
+		},
+	})
+end
+
+local function interact_with_diffview_review_comment()
+	local view = require("diffview.lib").get_current_view()
+	local entry = view and view.cur_entry
+	local layout = view and view.cur_layout
+	if not view or not view.octo_pr_context or not entry or not layout then
+		return
+	end
+
+	local current_win = vim.api.nvim_get_current_win()
+	local side = layout.a and layout.a.id == current_win and "LEFT"
+		or layout.b and layout.b.id == current_win and "RIGHT"
+		or nil
+	local line = vim.api.nvim_win_get_cursor(0)[1]
+	local comments = vim.tbl_filter(function(comment)
+		return comment.line == line
+			and comment.side == side
+			and (comment.path == entry.path or comment.path == entry.oldpath)
+	end, view.octo_review_comments or {})
+	if #comments == 0 then
+		vim.notify("No GitHub review comment is attached to this line", vim.log.levels.INFO)
+		return
+	end
+
+	local function choose_action(comment)
+		vim.ui.select({ "React", "Reply", "Resolve thread" }, { prompt = "Review comment action" }, function(action)
+			if action == "React" then
+				react_to_diffview_review_comment(view, comment)
+			elseif action == "Reply" then
+				reply_to_diffview_review_comment(view, comment)
+			elseif action == "Resolve thread" then
+				resolve_diffview_review_thread(view, comment)
+			end
+		end)
+	end
+
+	if #comments == 1 then
+		choose_action(comments[1])
+		return
+	end
+	vim.ui.select(comments, {
+		prompt = "Choose review comment",
+		format_item = function(comment)
+			local author = comment.user and comment.user.login or "unknown"
+			local summary = (comment.body or ""):match("[^\n]*") or ""
+			return string.format("@%s: %s", author, summary)
+		end,
+	}, function(comment)
+		if comment then
+			choose_action(comment)
+		end
+	end)
 end
 
 local function post_diffview_review_comment(context, body)
@@ -1685,6 +1912,11 @@ local function set_diffview_comment_mapping(bufnr)
 		return
 	end
 	render_diffview_review_comments(view)
+	vim.keymap.set("n", "c", interact_with_diffview_review_comment, {
+		buffer = bufnr,
+		desc = "Interact with Octo PR comment",
+		silent = true,
+	})
 	vim.keymap.set("x", "c", function()
 		add_diffview_review_comment(false)
 	end, {
