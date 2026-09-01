@@ -2,7 +2,6 @@ local M = {}
 
 function M.setup()
 	vim.g.opencode_opts = {}
-	vim.opt.autoread = true
 
 	local opencode_group = vim.api.nvim_create_augroup("OpencodeReload", { clear = true })
 	local reloaded_files = {}

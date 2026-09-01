@@ -30,6 +30,20 @@ vim.opt.splitbelow = true
 -- Save undo history
 vim.opt.undofile = true
 
+-- Reload buffers when their files are changed by external tools (for example,
+-- an AI agent). Modified buffers are left untouched and trigger a warning.
+vim.opt.autoread = true
+
+local external_changes_group = vim.api.nvim_create_augroup("ExternalFileChanges", { clear = true })
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
+	group = external_changes_group,
+	callback = function()
+		if vim.fn.getcmdwintype() == "" then
+			vim.cmd("silent! checktime")
+		end
+	end,
+})
+
 -- swap files have been a constant annoyance without ever truly helping ?!
 -- i hope i won't regret this
 -- Disable swap files safely
