@@ -1360,7 +1360,7 @@ local function setup_timeline_visuals()
 	end
 end
 
-local function open_diffview_comment_editor(context, on_submit)
+local function open_diffview_comment_editor(context, initial_lines, on_submit)
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	local width = math.min(80, math.max(vim.o.columns - 8, 40))
 	local height = math.min(12, math.max(vim.o.lines - 8, 6))
@@ -1372,7 +1372,13 @@ local function open_diffview_comment_editor(context, on_submit)
 		col = math.floor((vim.o.columns - width) / 2),
 		style = "minimal",
 		border = "rounded",
-		title = string.format(" Comment on %s:%d-%d ", context.path, context.start_line, context.end_line),
+		title = string.format(
+			" %s on %s:%d-%d ",
+			context.is_suggestion and "Suggestion" or "Comment",
+			context.path,
+			context.start_line,
+			context.end_line
+		),
 		title_pos = "center",
 	})
 
@@ -1380,6 +1386,7 @@ local function open_diffview_comment_editor(context, on_submit)
 	vim.bo[bufnr].buftype = "acwrite"
 	vim.bo[bufnr].bufhidden = "wipe"
 	vim.api.nvim_buf_set_name(bufnr, "octo-review-comment://" .. tostring(bufnr))
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, initial_lines or { "" })
 	vim.wo[winid].wrap = true
 	vim.wo[winid].linebreak = true
 
@@ -1411,6 +1418,9 @@ local function open_diffview_comment_editor(context, on_submit)
 		virt_text = { { "  :w post · q cancel", "Comment" } },
 		virt_text_pos = "right_align",
 	})
+	if context.is_suggestion then
+		vim.api.nvim_win_set_cursor(winid, { 2, 0 })
+	end
 	vim.cmd("startinsert")
 end
 
@@ -1449,7 +1459,7 @@ local function post_diffview_review_comment(context, body)
 	})
 end
 
-local function add_diffview_review_comment()
+local function add_diffview_review_comment(is_suggestion)
 	local view = require("diffview.lib").get_current_view()
 	local pr_context = view and view.octo_pr_context
 	local entry = view and view.cur_entry
@@ -1485,8 +1495,15 @@ local function add_diffview_review_comment()
 		side = side,
 		start_line = start_line,
 		end_line = end_line,
+		is_suggestion = is_suggestion,
 	})
-	open_diffview_comment_editor(context, function(body)
+	local initial_lines = { "" }
+	if is_suggestion then
+		initial_lines = { "```suggestion" }
+		vim.list_extend(initial_lines, vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false))
+		table.insert(initial_lines, "```")
+	end
+	open_diffview_comment_editor(context, initial_lines, function(body)
 		post_diffview_review_comment(context, body)
 	end)
 end
@@ -1502,9 +1519,18 @@ local function set_diffview_comment_mapping(bufnr)
 	if not is_diff_buffer then
 		return
 	end
-	vim.keymap.set("x", "c", add_diffview_review_comment, {
+	vim.keymap.set("x", "c", function()
+		add_diffview_review_comment(false)
+	end, {
 		buffer = bufnr,
 		desc = "Comment on Octo PR lines",
+		silent = true,
+	})
+	vim.keymap.set("x", "s", function()
+		add_diffview_review_comment(true)
+	end, {
+		buffer = bufnr,
+		desc = "Suggest change to Octo PR lines",
 		silent = true,
 	})
 end
