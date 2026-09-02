@@ -1,5 +1,128 @@
 local M = {}
 
+local notification_timer
+local notification_poll_running = false
+local notification_baseline_ready = false
+local notification_versions = {}
+local notification_last_error
+
+local function decode_notification_pages(data)
+	local ok, pages = pcall(vim.json.decode, data)
+	if not ok or type(pages) ~= "table" then
+		return nil
+	end
+	local notifications = {}
+	for _, page in ipairs(pages) do
+		if vim.islist(page) then
+			vim.list_extend(notifications, page)
+		end
+	end
+	return notifications
+end
+
+local function notification_message(notification)
+	local repo = vim.tbl_get(notification, "repository", "full_name") or "GitHub"
+	local subject = notification.subject or {}
+	local reason_labels = {
+		assign = "assigned",
+		author = "activity",
+		comment = "new comment",
+		invitation = "invitation",
+		manual = "subscribed",
+		mention = "mentioned",
+		review_requested = "review requested",
+		security_alert = "security alert",
+		state_change = "state changed",
+		subscribed = "new activity",
+		team_mention = "team mentioned",
+	}
+	local reason = reason_labels[notification.reason] or notification.reason or "updated"
+	return string.format("%s · %s\n%s · %s", repo, subject.title or "Untitled", subject.type or "Notification", reason)
+end
+
+local function poll_github_notifications(notify_when_unchanged)
+	if notification_poll_running then
+		return
+	end
+	notification_poll_running = true
+	local gh = require("octo.gh")
+	gh.api.get({
+		"notifications?per_page=100",
+		paginate = true,
+		slurp = true,
+		opts = {
+			cb = function(output, stderr)
+				notification_poll_running = false
+				if stderr and not vim.trim(stderr):match("^$") then
+					if stderr ~= notification_last_error then
+						notification_last_error = stderr
+						vim.notify("GitHub notification polling failed: " .. vim.trim(stderr), vim.log.levels.WARN)
+					end
+					return
+				end
+
+				local notifications = decode_notification_pages(output or "")
+				if not notifications then
+					return
+				end
+				notification_last_error = nil
+				local changed = {}
+				local current_versions = {}
+				for _, notification in ipairs(notifications) do
+					local id = tostring(notification.id)
+					local version = notification.updated_at or ""
+					current_versions[id] = version
+					if notification_baseline_ready and notification_versions[id] ~= version then
+						table.insert(changed, notification)
+					end
+				end
+				notification_versions = current_versions
+
+				if not notification_baseline_ready then
+					notification_baseline_ready = true
+					if notify_when_unchanged then
+						vim.notify(string.format("Watching %d unread GitHub notifications", #notifications), vim.log.levels.INFO)
+					end
+					return
+				end
+
+				for _, notification in ipairs(changed) do
+					vim.notify(notification_message(notification), vim.log.levels.INFO, { title = "GitHub notification" })
+				end
+				if notify_when_unchanged and #changed == 0 then
+					vim.notify("No new GitHub notifications", vim.log.levels.INFO)
+				end
+			end,
+		},
+	})
+end
+
+local function start_github_notification_polling()
+	if notification_timer then
+		vim.notify("GitHub notification polling is already running", vim.log.levels.INFO)
+		return
+	end
+	notification_timer = vim.uv.new_timer()
+	if not notification_timer then
+		vim.notify("Could not create GitHub notification timer", vim.log.levels.ERROR)
+		return
+	end
+	notification_timer:start(0, 60000, vim.schedule_wrap(function()
+		poll_github_notifications(false)
+	end))
+end
+
+local function stop_github_notification_polling(notify)
+	if notification_timer then
+		notification_timer:stop()
+		notification_timer:close()
+		notification_timer = nil
+	end
+	if notify then
+		vim.notify("GitHub notification polling stopped", vim.log.levels.INFO)
+	end
+end
+
 local function octo(command)
 	return function()
 		vim.cmd("Octo " .. command)
@@ -2507,6 +2630,38 @@ local function copy_current_pr_branch(branch_kind)
 	vim.notify("Copied " .. branch_kind .. " branch: " .. branch, vim.log.levels.INFO)
 end
 
+local function update_pr_branch(rebase)
+	local buffer = require("octo.utils").get_current_buffer()
+	if not buffer or not buffer:isPullRequest() then
+		vim.notify("Open an Octo PR buffer first", vim.log.levels.WARN)
+		return
+	end
+
+	local pr = buffer:pullRequest()
+	local repo = pr.baseRepository and pr.baseRepository.nameWithOwner or buffer.repo
+	local args = {
+		pr.number,
+		repo = repo,
+		opts = {
+			cb = require("octo.gh").create_callback({
+				success = function()
+					vim.notify(
+						rebase and "Updated PR branch with rebase" or "Updated PR branch with merge commit",
+						vim.log.levels.INFO
+					)
+					if vim.api.nvim_buf_is_valid(buffer.bufnr) then
+						require("octo").load_buffer({ bufnr = buffer.bufnr })
+					end
+				end,
+			}),
+		},
+	}
+	if rebase then
+		args.rebase = true
+	end
+	require("octo.gh").pr.update_branch(args)
+end
+
 local function setup_pr_options_diffview()
 	local mappings = require("octo.mappings")
 	if mappings.pr_options_with_diffview then
@@ -2523,13 +2678,19 @@ local function setup_pr_options_diffview()
 			if opts and opts.prompt == "Select an option:" and vim.tbl_contains(items, "Start Review") then
 				local diffview_option = "See Diff Changes"
 				local merge_after_checks_option = "Merge PR After Checks Success"
+				local update_with_merge_option = "Update with Merge Commit"
+				local update_with_rebase_option = "Update with Rebase"
 				local copy_feature_branch_option = "Copy Feature Branch Name"
 				local copy_base_branch_option = "Copy Base Branch Name"
-				local choices = vim.list_extend({}, items)
+				local choices = vim.tbl_filter(function(item)
+					return item ~= "Update Base Branch"
+				end, items)
 
 				for _, extra_option in ipairs({
 					diffview_option,
 					merge_after_checks_option,
+					update_with_merge_option,
+					update_with_rebase_option,
 					copy_feature_branch_option,
 					copy_base_branch_option,
 				}) do
@@ -2545,6 +2706,14 @@ local function setup_pr_options_diffview()
 					end
 					if choice == merge_after_checks_option then
 						require("octo.commands").commands.pr.merge("auto")
+						return
+					end
+					if choice == update_with_merge_option then
+						update_pr_branch(false)
+						return
+					end
+					if choice == update_with_rebase_option then
+						update_pr_branch(true)
 						return
 					end
 					if choice == copy_feature_branch_option then
@@ -2855,6 +3024,37 @@ function M.setup()
 	end, { desc = "Octo search current repo", silent = true })
 	vim.api.nvim_create_user_command("Myprs", open_my_prs, { desc = "Octo list open PRs authored by me" })
 	vim.api.nvim_create_user_command("Allprs", open_all_prs, { desc = "Octo list open PRs involving me" })
+	vim.api.nvim_create_user_command("GitHubNotificationsStart", start_github_notification_polling, {
+		desc = "Start polling unread GitHub notifications",
+	})
+	vim.api.nvim_create_user_command("GitHubNotificationsStop", function()
+		stop_github_notification_polling(true)
+	end, { desc = "Stop polling GitHub notifications" })
+	vim.api.nvim_create_user_command("GitHubNotificationsPoll", function()
+		poll_github_notifications(true)
+	end, { desc = "Check GitHub notifications now" })
+	vim.api.nvim_create_user_command("GitHubNotificationsStatus", function()
+		vim.notify(
+			string.format(
+				"GitHub notification polling: %s · baseline: %s · unread threads: %d",
+				notification_timer and "running" or "stopped",
+				notification_baseline_ready and "ready" or "loading",
+				vim.tbl_count(notification_versions)
+			),
+			vim.log.levels.INFO
+		)
+	end, { desc = "Show GitHub notification polling status" })
+	vim.keymap.set("n", "<leader>HN", function()
+		poll_github_notifications(true)
+	end, { desc = "Poll GitHub notifications", silent = true })
+
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = vim.api.nvim_create_augroup("GitHubNotificationPolling", { clear = true }),
+		callback = function()
+			stop_github_notification_polling(false)
+		end,
+	})
+	start_github_notification_polling()
 
 	vim.api.nvim_create_autocmd("FileType", {
 		group = vim.api.nvim_create_augroup("OctoOpenUrl", { clear = true }),
