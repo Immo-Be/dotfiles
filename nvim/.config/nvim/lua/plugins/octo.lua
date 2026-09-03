@@ -3541,18 +3541,25 @@ local function create_dashboard_issue_editor(repo, status)
 		submitting = false
 		vim.notify(message .. (stderr and "\n" .. vim.trim(stderr) or ""), vim.log.levels.WARN)
 	end
+	local function finish()
+		project_dashboard.focus_item_id = project_item_id
+		if vim.api.nvim_win_is_valid(winid) then
+			vim.api.nvim_win_close(winid, true)
+		end
+		vim.notify(string.format("Created %s#%d in %s", repo, created_issue.number, status.name), vim.log.levels.INFO)
+		refresh_project_dashboard()
+	end
 
 	local function set_status()
+		if not status.id then
+			finish()
+			return
+		end
 		local mutation = string.format(require("octo.gh.mutations").update_project_v2_item,
 			project.id, project_item_id, project.columns.id, status.id)
 		gh.api.graphql({ query = mutation, opts = { cb = gh.create_callback({
 			success = function()
-				project_dashboard.focus_item_id = project_item_id
-				if vim.api.nvim_win_is_valid(winid) then
-					vim.api.nvim_win_close(winid, true)
-				end
-				vim.notify(string.format("Created %s#%d in %s", repo, created_issue.number, status.name), vim.log.levels.INFO)
-				refresh_project_dashboard()
+				finish()
 			end,
 			failure = function(stderr)
 				fail("Issue created and added, but its status could not be set. :w retries only the status update.", stderr)
@@ -3655,7 +3662,7 @@ local function dashboard_status_at_cursor()
 	end
 	local column_index = math.floor((vim.fn.virtcol(".") - 1) / 36) + 1
 	local status = project_dashboard.columns[column_index]
-	return status and status.id and status or nil
+	return status
 end
 
 local function update_dashboard_active_column()
@@ -3696,7 +3703,9 @@ local function add_dashboard_issue(initial_status)
 			create_dashboard_issue_editor(repo, initial_status)
 			return
 		end
-		vim.ui.select(project_dashboard.project.columns.options, {
+		local statuses = vim.deepcopy(project_dashboard.project.columns.options)
+		table.insert(statuses, { id = false, name = "No status" })
+		vim.ui.select(statuses, {
 			prompt = "Initial project status:",
 			format_item = function(status) return status.name end,
 		}, function(status)
