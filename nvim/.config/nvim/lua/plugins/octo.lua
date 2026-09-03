@@ -3006,6 +3006,36 @@ local function display_slice(value, width)
 	return result .. "…" .. string.rep(" ", math.max(0, width - vim.fn.strdisplaywidth(result .. "…")))
 end
 
+local function display_wrap(value, width, max_lines)
+	local wrapped = {}
+	local current = ""
+	for index = 0, vim.fn.strchars(value or "") - 1 do
+		local char = vim.fn.strcharpart(value, index, 1)
+		if vim.fn.strdisplaywidth(current .. char) > width then
+			local head, tail = current:match("^(.*)%s+(%S+)$")
+			if head and head ~= "" then
+				table.insert(wrapped, display_slice(head, width))
+				current = tail .. char
+			else
+				table.insert(wrapped, display_slice(current, width))
+				current = char
+			end
+			if #wrapped == max_lines then
+				return wrapped
+			end
+		else
+			current = current .. char
+		end
+	end
+	if #wrapped < max_lines then
+		table.insert(wrapped, display_slice(vim.trim(current), width))
+	end
+	while #wrapped < max_lines do
+		table.insert(wrapped, string.rep(" ", width))
+	end
+	return wrapped
+end
+
 local function project_item_status(item, field_id)
 	for _, value in ipairs(vim.tbl_get(item, "fieldValues", "nodes") or {}) do
 		if value.field and value.field.id == field_id and value.name then
@@ -3013,6 +3043,37 @@ local function project_item_status(item, field_id)
 		end
 	end
 	return "No status"
+end
+
+local function project_item_matches_filter(content, filter)
+	if filter == "" then return true end
+	local viewer = type(vim.g.octo_viewer) == "string" and vim.g.octo_viewer:lower() or ""
+	local assignees = vim.tbl_get(content, "assignees", "nodes") or {}
+	local labels = vim.tbl_get(content, "labels", "nodes") or {}
+	local haystack_parts = {
+		content.title or "",
+		tostring(content.number or ""),
+		vim.tbl_get(content, "repository", "nameWithOwner") or "",
+	}
+	for _, assignee in ipairs(assignees) do table.insert(haystack_parts, assignee.login or "") end
+	for _, label in ipairs(labels) do table.insert(haystack_parts, label.name or "") end
+	local haystack = table.concat(haystack_parts, " "):lower()
+
+	for token in filter:lower():gmatch("%S+") do
+		if token == "@me" or token == "assignee:@me" then
+			local assigned_to_viewer = false
+			for _, assignee in ipairs(assignees) do
+				if viewer ~= "" and (assignee.login or ""):lower() == viewer then
+					assigned_to_viewer = true
+					break
+				end
+			end
+			if not assigned_to_viewer then return false end
+		elseif not haystack:find(token, 1, true) then
+			return false
+		end
+	end
+	return true
 end
 
 local function dashboard_item_at_cursor()
@@ -3044,9 +3105,7 @@ local function render_project_dashboard()
 	end
 	for _, item in ipairs(project_dashboard.items) do
 		local content = item.content
-		local haystack = content and table.concat({ content.title or "", tostring(content.number or ""),
-			vim.tbl_get(content, "repository", "nameWithOwner") or "" }, " "):lower() or ""
-		if content and (project_dashboard.filter == "" or haystack:find(project_dashboard.filter:lower(), 1, true)) then
+		if content and project_item_matches_filter(content, project_dashboard.filter) then
 			local status = project_item_status(item, project.columns.id)
 			grouped[status] = grouped[status] or {}
 			table.insert(grouped[status], item)
@@ -3059,13 +3118,14 @@ local function render_project_dashboard()
 	end
 
 	local width = 34
+	local content_width = width - 2
 	local gap = "  "
 	local lines = {
 		string.format("  %s  ·  %s", project.title, project.owner.login),
 		string.format("  %d items%s%s", #project_dashboard.items,
 			project_dashboard.filter ~= "" and "  ·  filter: " .. project_dashboard.filter or "",
 			project_dashboard.loading and "  ·  refreshing…" or ""),
-		"  <CR> open   p preview   a add   s move   / filter   ? help",
+		"  <CR> open   p preview   a add   s move   / filter (@me)   ? help",
 		"",
 	}
 	project_dashboard.row_cells = {}
@@ -3083,12 +3143,12 @@ local function render_project_dashboard()
 	table.insert(lines, table.concat(rules, gap))
 
 	for row = 1, max_items do
-		local cards = {}
-		local cells = {}
-		local byte_col = 0
+		local card_lines = { {}, {}, {}, {}, {} }
+		local line_cells = { {}, {}, {}, {}, {} }
+		local byte_cols = { 0, 0, 0, 0, 0 }
 		for column_index, column in ipairs(columns) do
 			local item = (grouped[column.name] or {})[row]
-			local label = ""
+			local rendered_lines = {}
 			if item then
 				local content = item.content
 				local metadata = {}
@@ -3102,20 +3162,35 @@ local function render_project_dashboard()
 				for _, item_label in ipairs(vim.tbl_get(content, "labels", "nodes") or {}) do
 					table.insert(metadata, item_label.name)
 				end
-				label = string.format(" %s %s%s",
+				local title_lines = display_wrap(string.format("%s %s",
 					content.number and "#" .. content.number or "Draft",
-					content.title or "Untitled",
-					#metadata > 0 and " · " .. table.concat(metadata, " · ") or "")
+					content.title or "Untitled"), content_width, 2)
+				local metadata_line = display_slice(#metadata > 0 and table.concat(metadata, " · ") or "", content_width)
+				rendered_lines = {
+					"╭" .. string.rep("─", content_width) .. "╮",
+					"│" .. title_lines[1] .. "│",
+					"│" .. title_lines[2] .. "│",
+					"│" .. metadata_line .. "│",
+					"╰" .. string.rep("─", content_width) .. "╯",
+				}
+			else
+				for _ = 1, 5 do table.insert(rendered_lines, string.rep(" ", width)) end
 			end
-			local rendered = display_slice(label, width)
-			if item then
-				table.insert(cells, { start_col = byte_col, end_col = byte_col + #rendered, item = item, column = column_index })
+			for line_index, rendered in ipairs(rendered_lines) do
+				if item then
+					table.insert(line_cells[line_index], {
+						start_col = byte_cols[line_index], end_col = byte_cols[line_index] + #rendered,
+						item = item, column = column_index,
+					})
+				end
+				table.insert(card_lines[line_index], rendered)
+				byte_cols[line_index] = byte_cols[line_index] + #rendered + #gap
 			end
-			table.insert(cards, rendered)
-			byte_col = byte_col + #rendered + #gap
 		end
-		table.insert(lines, table.concat(cards, gap))
-		project_dashboard.row_cells[#lines] = cells
+		for line_index = 1, 5 do
+			table.insert(lines, table.concat(card_lines[line_index], gap))
+			project_dashboard.row_cells[#lines] = line_cells[line_index]
+		end
 	end
 	if max_items == 0 then
 		table.insert(lines, "  No project items match the current filter.")
@@ -3159,12 +3234,12 @@ query($id: ID!, $after: String) {
             ... on Issue {
               id number title state url repository { nameWithOwner }
               labels(first: 2) { nodes { name } }
-              assignees(first: 1) { nodes { login } }
+              assignees(first: 20) { nodes { login } }
             }
             ... on PullRequest {
               id number title state url repository { nameWithOwner }
               labels(first: 2) { nodes { name } }
-              assignees(first: 1) { nodes { login } }
+              assignees(first: 20) { nodes { login } }
             }
             ... on DraftIssue { id title }
           }
@@ -3554,7 +3629,7 @@ local function create_dashboard_issue_editor(repo, status)
 		col = math.floor((vim.o.columns - width) / 2),
 		style = "minimal",
 		border = "rounded",
-		title = string.format(" New issue · %s · %s · first line is title · :w create ", repo, status.name),
+		title = string.format(" New issue · %s · %s · :w create · la/ld labels · aa/ad assignees ", repo, status.name),
 		title_pos = "center",
 	})
 	vim.bo[bufnr].buftype = "acwrite"
@@ -3571,6 +3646,64 @@ local function create_dashboard_issue_editor(repo, status)
 	local project_item_id
 	local gh = require("octo.gh")
 	local project = project_dashboard.project
+	local metadata_ns = vim.api.nvim_create_namespace("OctoProjectNewIssueMetadata")
+	local selected_labels = {}
+	local selected_assignees = {}
+
+	local function render_metadata()
+		if not vim.api.nvim_buf_is_valid(bufnr) then return end
+		local labels = vim.tbl_map(function(label) return label.name end, selected_labels)
+		local assignees = vim.tbl_map(function(assignee) return "@" .. assignee.login end, selected_assignees)
+		vim.api.nvim_buf_clear_namespace(bufnr, metadata_ns, 0, -1)
+		vim.api.nvim_buf_set_extmark(bufnr, metadata_ns, 0, 0, {
+			virt_lines_above = true,
+			virt_lines = {
+				{ { "  Labels: " .. (#labels > 0 and table.concat(labels, ", ") or "none"), "Comment" } },
+				{ { "  Assignees: " .. (#assignees > 0 and table.concat(assignees, ", ") or "none"), "Comment" } },
+				{ { "  First line: title · third line onward: description", "Comment" } },
+			},
+		})
+	end
+
+	local function add_metadata(kind)
+		local is_label = kind == "label"
+		local endpoint = is_label and "repos/{repo}/labels?per_page=100" or "repos/{repo}/assignees?per_page=100"
+		local selected = is_label and selected_labels or selected_assignees
+		gh.api.get({
+			endpoint, format = { repo = repo },
+			opts = { cb = gh.create_callback({ success = function(output)
+				local ok, choices = pcall(vim.json.decode, output)
+				if not ok then return end
+				local selected_ids = {}
+				for _, value in ipairs(selected) do selected_ids[value.node_id] = true end
+				choices = vim.tbl_filter(function(value) return not selected_ids[value.node_id] end, choices)
+				vim.ui.select(choices, {
+					prompt = is_label and "Add label:" or "Add assignee:",
+					format_item = function(value) return is_label and value.name or "@" .. value.login end,
+				}, function(value)
+					if value then
+						table.insert(selected, value)
+						render_metadata()
+					end
+				end)
+			end }) },
+		})
+	end
+
+	local function remove_metadata(kind)
+		local is_label = kind == "label"
+		local selected = is_label and selected_labels or selected_assignees
+		vim.ui.select(selected, {
+			prompt = is_label and "Remove label:" or "Remove assignee:",
+			format_item = function(value) return is_label and value.name or "@" .. value.login end,
+		}, function(value, index)
+			if value then
+				table.remove(selected, index)
+				render_metadata()
+			end
+		end)
+	end
+	render_metadata()
 
 	local function fail(message, stderr)
 		submitting = false
@@ -3622,13 +3755,18 @@ local function create_dashboard_issue_editor(repo, status)
 	end
 
 	local function create_issue(repository_id, title, body)
+		local label_ids = vim.tbl_map(function(label) return label.node_id end, selected_labels)
+		local assignee_ids = vim.tbl_map(function(assignee) return assignee.node_id end, selected_assignees)
 		gh.api.graphql({
 			query = [[
-mutation($repositoryId: ID!, $title: String!, $body: String!) {
-  createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body}) { issue { id number } }
+mutation($repositoryId: ID!, $title: String!, $body: String!, $labelIds: [ID!], $assigneeIds: [ID!]) {
+  createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body, labelIds: $labelIds, assigneeIds: $assigneeIds}) {
+    issue { id number }
+  }
 }
 ]],
 			f = { repositoryId = repository_id, title = title, body = body },
+			F = { labelIds = label_ids, assigneeIds = assignee_ids },
 			opts = { cb = gh.create_callback({
 				success = function(output)
 					local ok, response = pcall(vim.json.decode, output)
@@ -3685,6 +3823,14 @@ mutation($repositoryId: ID!, $title: String!, $body: String!) {
 			vim.api.nvim_win_close(winid, true)
 		end
 	end, { buffer = bufnr, silent = true, desc = "Cancel new GitHub issue" })
+	vim.keymap.set("n", "la", function() add_metadata("label") end,
+		{ buffer = bufnr, silent = true, desc = "Add label to new GitHub issue" })
+	vim.keymap.set("n", "ld", function() remove_metadata("label") end,
+		{ buffer = bufnr, silent = true, desc = "Remove label from new GitHub issue" })
+	vim.keymap.set("n", "aa", function() add_metadata("assignee") end,
+		{ buffer = bufnr, silent = true, desc = "Add assignee to new GitHub issue" })
+	vim.keymap.set("n", "ad", function() remove_metadata("assignee") end,
+		{ buffer = bufnr, silent = true, desc = "Remove assignee from new GitHub issue" })
 end
 
 local function dashboard_status_at_cursor()
@@ -3803,7 +3949,7 @@ local function open_project_dashboard_buffer(project, items, repositories)
 		show_octo_project_help("Project dashboard", {
 			{ "<CR>", "open issue or PR editor" }, { "p", "preview card details" },
 			{ "a", "create issue in current column" }, { "s", "move card to another status" },
-			{ "/", "filter cards" }, { "r", "refresh project" },
+			{ "/", "filter cards; @me means assigned to me" }, { "r", "refresh project" },
 			{ "gx", "open card or project in browser" }, { "q", "close dashboard" },
 		}) end, "Show project dashboard help")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
@@ -3899,6 +4045,57 @@ local function open_project_dashboard()
 	})
 end
 
+local function setup_immediate_issue_reference_previews()
+	local group = vim.api.nvim_create_augroup("OctoImmediateIssueReferencePreview", { clear = true })
+	local last_reference_by_buffer = {}
+
+	-- Octo normally handles every hover through CursorHold. Issue references are
+	-- handled immediately below; keep the delayed path for users and reactions.
+	vim.api.nvim_clear_autocmds({ group = "octo_autocmds", event = "CursorHold", pattern = "octo://*" })
+	vim.api.nvim_create_autocmd("CursorMoved", {
+		group = group,
+		pattern = "octo://*",
+		callback = function(event)
+			local buffer = require("octo.utils").get_current_buffer()
+			if not buffer then return end
+			local repo, number = require("octo.utils").extract_issue_at_cursor(buffer.repo)
+			local reference = repo and number and string.format("%s#%d", repo, number) or nil
+			if not reference then
+				last_reference_by_buffer[event.buf] = nil
+				return
+			end
+			if last_reference_by_buffer[event.buf] == reference then return end
+			last_reference_by_buffer[event.buf] = reference
+			vim.schedule(function()
+				if vim.api.nvim_get_current_buf() ~= event.buf then return end
+				local current = require("octo.utils").get_current_buffer()
+				if not current then return end
+				local current_repo, current_number = require("octo.utils").extract_issue_at_cursor(current.repo)
+				if current_repo and current_number and string.format("%s#%d", current_repo, current_number) == reference then
+					require("octo").on_cursor_hold()
+				end
+			end)
+		end,
+	})
+	vim.api.nvim_create_autocmd("CursorHold", {
+		group = group,
+		pattern = "octo://*",
+		callback = function()
+			local buffer = require("octo.utils").get_current_buffer()
+			if not buffer then return end
+			local repo, number = require("octo.utils").extract_issue_at_cursor(buffer.repo)
+			if not repo or not number then
+				require("octo").on_cursor_hold()
+			end
+		end,
+	})
+	vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+		group = group,
+		pattern = "octo://*",
+		callback = function(event) last_reference_by_buffer[event.buf] = nil end,
+	})
+end
+
 function M.setup()
 	setup_highlights()
 
@@ -3958,6 +4155,7 @@ function M.setup()
 	setup_prompt_delete_branch_after_merge()
 	setup_compact_octo_details()
 	setup_cmp_completion()
+	setup_immediate_issue_reference_previews()
 
 	vim.keymap.set("n", "<leader>Ha", octo("actions"), { desc = "Octo actions", silent = true })
 	vim.keymap.set("n", "<leader>Hi", octo("issue list"), { desc = "Octo list issues", silent = true })
