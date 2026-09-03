@@ -3356,99 +3356,109 @@ local function create_dashboard_issue_editor(repo, status)
 	vim.cmd("startinsert")
 
 	local submitting = false
+	local created_issue
+	local project_item_id
+	local gh = require("octo.gh")
+	local project = project_dashboard.project
+
+	local function fail(message, stderr)
+		submitting = false
+		vim.notify(message .. (stderr and "\n" .. vim.trim(stderr) or ""), vim.log.levels.WARN)
+	end
+
+	local function set_status()
+		local mutation = string.format(require("octo.gh.mutations").update_project_v2_item,
+			project.id, project_item_id, project.columns.id, status.id)
+		gh.api.graphql({ query = mutation, opts = { cb = gh.create_callback({
+			success = function()
+				if vim.api.nvim_win_is_valid(winid) then
+					vim.api.nvim_win_close(winid, true)
+				end
+				vim.notify(string.format("Created %s#%d in %s", repo, created_issue.number, status.name), vim.log.levels.INFO)
+				refresh_project_dashboard()
+			end,
+			failure = function(stderr)
+				fail("Issue created and added, but its status could not be set. :w retries only the status update.", stderr)
+				refresh_project_dashboard()
+			end,
+		}) } })
+	end
+
+	local function add_to_project()
+		local mutation = string.format(require("octo.gh.mutations").add_project_v2_item, created_issue.id, project.id)
+		gh.api.graphql({ query = mutation, opts = { cb = gh.create_callback({
+			success = function(output)
+				local ok, response = pcall(vim.json.decode, output)
+				project_item_id = ok and vim.tbl_get(response, "data", "addProjectV2ItemById", "item", "id") or nil
+				if project_item_id then
+					set_status()
+				else
+					fail(string.format("Created %s#%d, but could not add it to the project. :w retries only that step.", repo, created_issue.number))
+				end
+			end,
+			failure = function(stderr)
+				fail(string.format("Created %s#%d, but could not add it to the project. :w retries only that step.", repo, created_issue.number), stderr)
+			end,
+		}) } })
+	end
+
+	local function create_issue(repository_id, title, body)
+		gh.api.graphql({
+			query = [[
+mutation($repositoryId: ID!, $title: String!, $body: String!) {
+  createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body}) { issue { id number } }
+}
+]],
+			f = { repositoryId = repository_id, title = title, body = body },
+			opts = { cb = gh.create_callback({
+				success = function(output)
+					local ok, response = pcall(vim.json.decode, output)
+					created_issue = ok and vim.tbl_get(response, "data", "createIssue", "issue") or nil
+					if created_issue then
+						add_to_project()
+					else
+						fail("GitHub did not return the created issue")
+					end
+				end,
+				failure = function(stderr) fail("Could not create issue", stderr) end,
+			}) },
+		})
+	end
+
 	vim.api.nvim_create_autocmd("BufWriteCmd", {
 		buffer = bufnr,
 		callback = function()
-			if submitting then
-				return
-			end
+			if submitting then return end
 			local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 			local title = vim.trim(lines[1] or "")
 			if title == "" then
 				vim.notify("The issue title cannot be empty", vim.log.levels.WARN)
 				return
 			end
-			local body = table.concat(vim.list_slice(lines, 3), "\n")
-			local owner, name = require("octo.utils").split_repo(repo)
-			local gh = require("octo.gh")
 			submitting = true
-			gh.api.graphql({
-				query = [[query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { id } }]],
-				F = { owner = owner, name = name },
-				opts = { cb = gh.create_callback({
-					success = function(output)
-						local ok, response = pcall(vim.json.decode, output)
-						local repository_id = ok and vim.tbl_get(response, "data", "repository", "id") or nil
-						if not repository_id then
-							submitting = false
-							vim.notify("Could not resolve repository " .. repo, vim.log.levels.ERROR)
-							return
-						end
-						gh.api.graphql({
-							query = [[
-mutation($repositoryId: ID!, $title: String!, $body: String!) {
-  createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body}) {
-    issue { id number }
-  }
-}
-]],
-							f = { repositoryId = repository_id, title = title, body = body },
-							opts = { cb = gh.create_callback({
-								success = function(created_output)
-									local created_ok, created_response = pcall(vim.json.decode, created_output)
-									local issue = created_ok and vim.tbl_get(created_response, "data", "createIssue", "issue") or nil
-									if not issue then
-										submitting = false
-										vim.notify("GitHub did not return the created issue", vim.log.levels.ERROR)
-										return
-									end
-									local project = project_dashboard.project
-									local add_mutation = string.format(require("octo.gh.mutations").add_project_v2_item, issue.id, project.id)
-									gh.api.graphql({ query = add_mutation, opts = { cb = gh.create_callback({
-										success = function(added_output)
-											local added_ok, added_response = pcall(vim.json.decode, added_output)
-											local item_id = added_ok and vim.tbl_get(added_response, "data", "addProjectV2ItemById", "item", "id") or nil
-											if not item_id then
-												submitting = false
-												vim.notify(string.format("Created %s#%d, but could not add it to the project", repo, issue.number), vim.log.levels.WARN)
-												return
-											end
-											local status_mutation = string.format(require("octo.gh.mutations").update_project_v2_item,
-												project.id, item_id, project.columns.id, status.id)
-											gh.api.graphql({ query = status_mutation, opts = { cb = gh.create_callback({
-												success = function()
-													if vim.api.nvim_win_is_valid(winid) then
-														vim.api.nvim_win_close(winid, true)
-													end
-													vim.notify(string.format("Created %s#%d in %s", repo, issue.number, status.name), vim.log.levels.INFO)
-													refresh_project_dashboard()
-												end,
-												failure = function(stderr)
-													submitting = false
-													vim.notify("Issue created and added, but its status could not be set:\n" .. vim.trim(stderr or ""), vim.log.levels.WARN)
-													refresh_project_dashboard()
-												end,
-											}) } })
-										end,
-										failure = function(stderr)
-											submitting = false
-											vim.notify("Issue created, but could not be added to the project:\n" .. vim.trim(stderr or ""), vim.log.levels.WARN)
-										end,
-									}) } })
-								end,
-								failure = function(stderr)
-									submitting = false
-									vim.notify("Could not create issue:\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
-								end,
-							}) },
-						})
-					end,
-					failure = function(stderr)
-						submitting = false
-						vim.notify("Could not resolve repository:\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
-					end,
-				}) },
-			})
+			if project_item_id then
+				set_status()
+			elseif created_issue then
+				add_to_project()
+			else
+				local owner, name = require("octo.utils").split_repo(repo)
+				gh.api.graphql({
+					query = [[query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { id } }]],
+					F = { owner = owner, name = name },
+					opts = { cb = gh.create_callback({
+						success = function(output)
+							local ok, response = pcall(vim.json.decode, output)
+							local repository_id = ok and vim.tbl_get(response, "data", "repository", "id") or nil
+							if repository_id then
+								create_issue(repository_id, title, table.concat(vim.list_slice(lines, 3), "\n"))
+							else
+								fail("Could not resolve repository " .. repo)
+							end
+						end,
+						failure = function(stderr) fail("Could not resolve repository", stderr) end,
+					}) },
+				})
+			end
 		end,
 	})
 	vim.keymap.set("n", "q", function()
