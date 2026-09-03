@@ -4,6 +4,7 @@ function M.setup()
 	require("git-conflict").setup()
 
 	require("diffview").setup({
+		enhanced_diff_hl = true,
 		view = {
 			merge_tool = {
 				layout = "diff1_plain",
