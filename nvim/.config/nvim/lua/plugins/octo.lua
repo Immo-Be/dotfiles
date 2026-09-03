@@ -3095,9 +3095,18 @@ local function render_project_dashboard()
 			local label = ""
 			if item then
 				local content = item.content
-				local kind = content.__typename == "PullRequest" and "PR" or (content.__typename == "DraftIssue" and "Draft" or "#")
-				label = kind == "#" and string.format(" #%d %s", content.number, content.title)
-					or string.format(" %s %s%s", kind, content.number and "#" .. content.number .. " " or "", content.title)
+				local kind = content.__typename == "PullRequest" and "PR" or (content.__typename == "DraftIssue" and "D" or "I")
+				local closed = content.state == "CLOSED" or content.state == "MERGED"
+				local metadata = {}
+				local assignee = vim.tbl_get(content, "assignees", "nodes", 1, "login")
+				if assignee then table.insert(metadata, "@" .. assignee) end
+				for _, item_label in ipairs(vim.tbl_get(content, "labels", "nodes") or {}) do
+					table.insert(metadata, item_label.name)
+				end
+				label = string.format(" [%s]%s%s %s", kind,
+					closed and "✓" or "",
+					content.number and " #" .. content.number or "",
+					(#metadata > 0 and table.concat(metadata, " · ") .. " · " or "") .. (content.title or "Untitled"))
 			end
 			local rendered = display_slice(label, width)
 			if item then
@@ -3121,6 +3130,15 @@ local function render_project_dashboard()
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 1, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 2, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoStateOpen", 4, 0, -1)
+	for line, cells in pairs(project_dashboard.row_cells) do
+		for _, cell in ipairs(cells) do
+			local content = cell.item.content
+			local closed = content.state == "CLOSED" or content.state == "MERGED"
+			local highlight = closed and "OctoProjectCardClosed"
+				or (content.__typename == "PullRequest" and "OctoProjectPullRequest" or "OctoProjectIssue")
+			vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, highlight, line - 1, cell.start_col, cell.end_col)
+		end
+	end
 	local active = project_dashboard.active_column
 	local focus_target
 	if active and header_ranges[active] then
@@ -3164,8 +3182,16 @@ query($id: ID!, $after: String) {
           id
           content {
             __typename
-            ... on Issue { id number title state url repository { nameWithOwner } }
-            ... on PullRequest { id number title state url repository { nameWithOwner } }
+            ... on Issue {
+              id number title state url repository { nameWithOwner }
+              labels(first: 2) { nodes { name } }
+              assignees(first: 1) { nodes { login } }
+            }
+            ... on PullRequest {
+              id number title state url repository { nameWithOwner }
+              labels(first: 2) { nodes { name } }
+              assignees(first: 1) { nodes { login } }
+            }
             ... on DraftIssue { id title }
           }
           fieldValues(first: 50) {
@@ -3824,6 +3850,9 @@ local function open_project_dashboard_buffer(project, items, repositories)
 		callback = update_dashboard_active_column,
 	})
 	vim.api.nvim_set_hl(0, "OctoProjectActiveColumn", { link = "Visual", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectIssue", { link = "DiagnosticInfo", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectPullRequest", { link = "DiagnosticHint", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardClosed", { link = "Comment", default = true })
 	render_project_dashboard()
 end
 
