@@ -3274,7 +3274,7 @@ local function open_dashboard_item()
 		col = math.floor((vim.o.columns - width) / 2),
 		style = "minimal",
 		border = "rounded",
-		title = string.format(" %s #%d · :w save · C comment · la/ld labels · q close ", repo, content.number),
+		title = string.format(" %s #%d · :w save · C comment · la/ld labels · aa/ad assignees · q close ", repo, content.number),
 		title_pos = "center",
 	})
 	local utils = require("octo.utils")
@@ -3304,6 +3304,8 @@ local function open_dashboard_item()
 	map("C", "<cmd>Octo comment add<CR>", "Add GitHub comment")
 	map("la", "<cmd>Octo label add<CR>", "Add GitHub label")
 	map("ld", "<cmd>Octo label remove<CR>", "Remove GitHub label")
+	map("aa", "<cmd>Octo assignee add<CR>", "Add GitHub assignee")
+	map("ad", "<cmd>Octo assignee remove<CR>", "Remove GitHub assignee")
 end
 
 local function move_dashboard_item()
@@ -3653,6 +3655,7 @@ function M.setup()
 	require("octo").setup({
 		picker = "default",
 		enable_builtin = true,
+		default_to_projects_v2 = true,
 		users = "assignable",
 		commands = {
 			pr = {
