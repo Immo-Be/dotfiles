@@ -2957,6 +2957,7 @@ local project_dashboard = {
 	columns = {},
 	filter = "",
 	loading = false,
+	active_column = nil,
 }
 
 local project_dashboard_ns = vim.api.nvim_create_namespace("OctoProjectDashboard")
@@ -3042,10 +3043,14 @@ local function render_project_dashboard()
 	project_dashboard.row_cells = {}
 
 	local headers = {}
+	local header_ranges = {}
 	local rules = {}
 	local max_items = 0
 	for _, column in ipairs(columns) do
-		table.insert(headers, display_slice(string.format(" %s (%d)", column.name, #(grouped[column.name] or {})), width))
+		local header = display_slice(string.format(" %s (%d)", column.name, #(grouped[column.name] or {})), width)
+		local start_col = #table.concat(headers, gap) + (#headers > 0 and #gap or 0)
+		table.insert(header_ranges, { start_col = start_col, end_col = start_col + #header })
+		table.insert(headers, header)
 		table.insert(rules, string.rep("─", width))
 		max_items = math.max(max_items, #(grouped[column.name] or {}))
 	end
@@ -3056,7 +3061,7 @@ local function render_project_dashboard()
 		local cards = {}
 		local cells = {}
 		local byte_col = 0
-		for _, column in ipairs(columns) do
+		for column_index, column in ipairs(columns) do
 			local item = (grouped[column.name] or {})[row]
 			local label = ""
 			if item then
@@ -3067,7 +3072,7 @@ local function render_project_dashboard()
 			end
 			local rendered = display_slice(label, width)
 			if item then
-				table.insert(cells, { start_col = byte_col, end_col = byte_col + #rendered, item = item })
+				table.insert(cells, { start_col = byte_col, end_col = byte_col + #rendered, item = item, column = column_index })
 			end
 			table.insert(cards, rendered)
 			byte_col = byte_col + #rendered + #gap
@@ -3087,6 +3092,19 @@ local function render_project_dashboard()
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 1, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 2, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoStateOpen", 4, 0, -1)
+	local active = project_dashboard.active_column
+	if active and header_ranges[active] then
+		vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoProjectActiveColumn", 4,
+			header_ranges[active].start_col, header_ranges[active].end_col)
+		for line, cells in pairs(project_dashboard.row_cells) do
+			for _, cell in ipairs(cells) do
+				if cell.column == active then
+					vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoProjectActiveColumn", line - 1,
+						cell.start_col, cell.end_col)
+				end
+			end
+		end
+	end
 end
 
 local project_items_query = [[
@@ -3486,6 +3504,17 @@ local function dashboard_status_at_cursor()
 	return status and status.id and status or nil
 end
 
+local function update_dashboard_active_column()
+	if vim.api.nvim_get_current_buf() ~= project_dashboard.bufnr then return end
+	local row = vim.api.nvim_win_get_cursor(0)[1]
+	local column = row >= 5 and math.floor((vim.fn.virtcol(".") - 1) / 36) + 1 or nil
+	if column and not project_dashboard.columns[column] then column = nil end
+	if project_dashboard.active_column ~= column then
+		project_dashboard.active_column = column
+		render_project_dashboard()
+	end
+end
+
 local function add_dashboard_issue(initial_status)
 	local repositories = {}
 	local seen = {}
@@ -3544,6 +3573,7 @@ local function open_project_dashboard_buffer(project, items)
 	project_dashboard.items = items
 	project_dashboard.filter = ""
 	project_dashboard.loading = false
+	project_dashboard.active_column = 1
 	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].bufhidden = "wipe"
 	vim.bo[bufnr].swapfile = false
@@ -3577,6 +3607,11 @@ local function open_project_dashboard_buffer(project, items)
 		open_url(item and item.content and item.content.url or project.url)
 	end, "Open project item in browser")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
+	vim.api.nvim_create_autocmd("CursorMoved", {
+		buffer = bufnr,
+		callback = update_dashboard_active_column,
+	})
+	vim.api.nvim_set_hl(0, "OctoProjectActiveColumn", { link = "Visual", default = true })
 	render_project_dashboard()
 end
 
