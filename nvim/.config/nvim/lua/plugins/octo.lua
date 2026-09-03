@@ -2958,6 +2958,7 @@ local project_dashboard = {
 	filter = "",
 	loading = false,
 	active_column = nil,
+	focus_item_id = nil,
 }
 
 local project_dashboard_ns = vim.api.nvim_create_namespace("OctoProjectDashboard")
@@ -3093,17 +3094,35 @@ local function render_project_dashboard()
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 2, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoStateOpen", 4, 0, -1)
 	local active = project_dashboard.active_column
+	local focus_target
 	if active and header_ranges[active] then
 		vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoProjectActiveColumn", 4,
 			header_ranges[active].start_col, header_ranges[active].end_col)
 		for line, cells in pairs(project_dashboard.row_cells) do
 			for _, cell in ipairs(cells) do
+				if cell.item.id == project_dashboard.focus_item_id then
+					focus_target = { line, cell.start_col }
+				end
 				if cell.column == active then
 					vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoProjectActiveColumn", line - 1,
 						cell.start_col, cell.end_col)
 				end
 			end
 		end
+	end
+	if not focus_target and project_dashboard.focus_item_id then
+		for line, cells in pairs(project_dashboard.row_cells) do
+			for _, cell in ipairs(cells) do
+				if cell.item.id == project_dashboard.focus_item_id then
+					focus_target = { line, cell.start_col }
+				end
+			end
+		end
+	end
+	local winid = vim.fn.bufwinid(bufnr)
+	if focus_target and winid ~= -1 then
+		vim.api.nvim_win_set_cursor(winid, focus_target)
+		project_dashboard.focus_item_id = nil
 	end
 end
 
@@ -3268,6 +3287,10 @@ end
 local function refresh_project_dashboard()
 	if not project_dashboard.project then
 		return
+	end
+	local focused = dashboard_item_at_cursor()
+	if focused then
+		project_dashboard.focus_item_id = focused.id
 	end
 	project_dashboard.loading = true
 	render_project_dashboard()
@@ -3481,6 +3504,7 @@ local function create_dashboard_issue_editor(repo, status)
 			project.id, project_item_id, project.columns.id, status.id)
 		gh.api.graphql({ query = mutation, opts = { cb = gh.create_callback({
 			success = function()
+				project_dashboard.focus_item_id = project_item_id
 				if vim.api.nvim_win_is_valid(winid) then
 					vim.api.nvim_win_close(winid, true)
 				end
@@ -3661,6 +3685,7 @@ local function open_project_dashboard_buffer(project, items)
 	project_dashboard.filter = ""
 	project_dashboard.loading = false
 	project_dashboard.active_column = 1
+	project_dashboard.focus_item_id = nil
 	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].bufhidden = "wipe"
 	vim.bo[bufnr].swapfile = false
