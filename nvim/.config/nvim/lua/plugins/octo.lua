@@ -2964,6 +2964,33 @@ local project_dashboard = {
 
 local project_dashboard_ns = vim.api.nvim_create_namespace("OctoProjectDashboard")
 
+local function show_octo_project_help(title, entries)
+	local width = 58
+	local height = #entries + 4
+	local bufnr = vim.api.nvim_create_buf(false, true)
+	local winid = vim.api.nvim_open_win(bufnr, true, {
+		relative = "editor", width = width, height = height,
+		row = math.floor((vim.o.lines - height) / 2) - 1,
+		col = math.floor((vim.o.columns - width) / 2),
+		style = "minimal", border = "rounded", title = " " .. title .. " ", title_pos = "center",
+	})
+	local lines = { "" }
+	for _, entry in ipairs(entries) do
+		table.insert(lines, string.format("  %-12s %s", entry[1], entry[2]))
+	end
+	table.insert(lines, "")
+	table.insert(lines, "  Press q or ? to close")
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+	vim.bo[bufnr].buftype = "nofile"
+	vim.bo[bufnr].bufhidden = "wipe"
+	vim.bo[bufnr].modifiable = false
+	for _, key in ipairs({ "q", "?", "<Esc>" }) do
+		vim.keymap.set("n", key, function()
+			if vim.api.nvim_win_is_valid(winid) then vim.api.nvim_win_close(winid, true) end
+		end, { buffer = bufnr, silent = true })
+	end
+end
+
 local function display_slice(value, width)
 	value = value or ""
 	if vim.fn.strdisplaywidth(value) <= width then
@@ -3039,7 +3066,7 @@ local function render_project_dashboard()
 		string.format("  %d items%s%s", #project_dashboard.items,
 			project_dashboard.filter ~= "" and "  ·  filter: " .. project_dashboard.filter or "",
 			project_dashboard.loading and "  ·  refreshing…" or ""),
-		"  <CR> open   p preview   a add issue   s move   / filter   r refresh   gx browser   q close",
+		"  <CR> open   p preview   a add   s move   / filter   ? help",
 		"",
 	}
 	project_dashboard.row_cells = {}
@@ -3395,6 +3422,14 @@ local function open_dashboard_item()
 	map("ld", "<cmd>Octo label remove<CR>", "Remove GitHub label")
 	map("aa", "<cmd>Octo assignee add<CR>", "Add GitHub assignee")
 	map("ad", "<cmd>Octo assignee remove<CR>", "Remove GitHub assignee")
+	map("?", function()
+		show_octo_project_help("Issue popup", {
+			{ "i / normal edit", "edit title or description" },
+			{ ":w", "save title, description, or new comment" },
+			{ "C", "add a comment" }, { "la / ld", "add / remove a label" },
+			{ "aa / ad", "add / remove an assignee" }, { "q", "close popup" },
+		})
+	end, "Show issue popup help")
 end
 
 local function preview_dashboard_item()
@@ -3776,6 +3811,13 @@ local function open_project_dashboard_buffer(project, items, repositories)
 		local item = dashboard_item_at_cursor()
 		open_url(item and item.content and item.content.url or project.url)
 	end, "Open project item in browser")
+	map("?", function()
+		show_octo_project_help("Project dashboard", {
+			{ "<CR>", "open issue or PR editor" }, { "p", "preview card details" },
+			{ "a", "create issue in current column" }, { "s", "move card to another status" },
+			{ "/", "filter cards" }, { "r", "refresh project" },
+			{ "gx", "open card or project in browser" }, { "q", "close dashboard" },
+		}) end, "Show project dashboard help")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
 	vim.api.nvim_create_autocmd("CursorMoved", {
 		buffer = bufnr,
