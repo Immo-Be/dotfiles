@@ -2957,7 +2957,6 @@ local project_dashboard = {
 	columns = {},
 	filter = "",
 	loading = false,
-	active_column = nil,
 	focus_item_id = nil,
 	repositories = {},
 }
@@ -3072,13 +3071,10 @@ local function render_project_dashboard()
 	project_dashboard.row_cells = {}
 
 	local headers = {}
-	local header_ranges = {}
 	local rules = {}
 	local max_items = 0
 	for _, column in ipairs(columns) do
 		local header = display_slice(string.format(" %s (%d)", column.name, #(grouped[column.name] or {})), width)
-		local start_col = #table.concat(headers, gap) + (#headers > 0 and #gap or 0)
-		table.insert(header_ranges, { start_col = start_col, end_col = start_col + #header })
 		table.insert(headers, header)
 		table.insert(rules, string.rep("─", width))
 		max_items = math.max(max_items, #(grouped[column.name] or {}))
@@ -3095,18 +3091,21 @@ local function render_project_dashboard()
 			local label = ""
 			if item then
 				local content = item.content
-				local kind = content.__typename == "PullRequest" and "PR" or (content.__typename == "DraftIssue" and "D" or "I")
-				local closed = content.state == "CLOSED" or content.state == "MERGED"
 				local metadata = {}
+				if content.__typename == "PullRequest" then
+					table.insert(metadata, "PR")
+				elseif content.__typename == "DraftIssue" then
+					table.insert(metadata, "draft")
+				end
 				local assignee = vim.tbl_get(content, "assignees", "nodes", 1, "login")
 				if assignee then table.insert(metadata, "@" .. assignee) end
 				for _, item_label in ipairs(vim.tbl_get(content, "labels", "nodes") or {}) do
 					table.insert(metadata, item_label.name)
 				end
-				label = string.format(" [%s]%s%s %s", kind,
-					closed and "✓" or "",
-					content.number and " #" .. content.number or "",
-					(#metadata > 0 and table.concat(metadata, " · ") .. " · " or "") .. (content.title or "Untitled"))
+				label = string.format(" %s %s%s",
+					content.number and "#" .. content.number or "Draft",
+					content.title or "Untitled",
+					#metadata > 0 and " · " .. table.concat(metadata, " · ") or "")
 			end
 			local rendered = display_slice(label, width)
 			if item then
@@ -3130,33 +3129,8 @@ local function render_project_dashboard()
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 1, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 2, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoStateOpen", 4, 0, -1)
-	for line, cells in pairs(project_dashboard.row_cells) do
-		for _, cell in ipairs(cells) do
-			local content = cell.item.content
-			local closed = content.state == "CLOSED" or content.state == "MERGED"
-			local highlight = closed and "OctoProjectCardClosed"
-				or (content.__typename == "PullRequest" and "OctoProjectPullRequest" or "OctoProjectIssue")
-			vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, highlight, line - 1, cell.start_col, cell.end_col)
-		end
-	end
-	local active = project_dashboard.active_column
 	local focus_target
-	if active and header_ranges[active] then
-		vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoProjectActiveColumn", 4,
-			header_ranges[active].start_col, header_ranges[active].end_col)
-		for line, cells in pairs(project_dashboard.row_cells) do
-			for _, cell in ipairs(cells) do
-				if cell.item.id == project_dashboard.focus_item_id then
-					focus_target = { line, cell.start_col }
-				end
-				if cell.column == active then
-					vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoProjectActiveColumn", line - 1,
-						cell.start_col, cell.end_col)
-				end
-			end
-		end
-	end
-	if not focus_target and project_dashboard.focus_item_id then
+	if project_dashboard.focus_item_id then
 		for line, cells in pairs(project_dashboard.row_cells) do
 			for _, cell in ipairs(cells) do
 				if cell.item.id == project_dashboard.focus_item_id then
@@ -3726,17 +3700,6 @@ local function dashboard_status_at_cursor()
 	return status
 end
 
-local function update_dashboard_active_column()
-	if vim.api.nvim_get_current_buf() ~= project_dashboard.bufnr then return end
-	local row = vim.api.nvim_win_get_cursor(0)[1]
-	local column = row >= 5 and math.floor((vim.fn.virtcol(".") - 1) / 36) + 1 or nil
-	if column and not project_dashboard.columns[column] then column = nil end
-	if project_dashboard.active_column ~= column then
-		project_dashboard.active_column = column
-		render_project_dashboard()
-	end
-end
-
 local function add_dashboard_issue(initial_status)
 	local repositories = {}
 	local seen = {}
@@ -3801,7 +3764,6 @@ local function open_project_dashboard_buffer(project, items, repositories)
 	project_dashboard.items = items
 	project_dashboard.filter = ""
 	project_dashboard.loading = false
-	project_dashboard.active_column = 1
 	project_dashboard.focus_item_id = nil
 	project_dashboard.repositories = repositories or {}
 	vim.bo[bufnr].buftype = "nofile"
@@ -3845,14 +3807,6 @@ local function open_project_dashboard_buffer(project, items, repositories)
 			{ "gx", "open card or project in browser" }, { "q", "close dashboard" },
 		}) end, "Show project dashboard help")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
-	vim.api.nvim_create_autocmd("CursorMoved", {
-		buffer = bufnr,
-		callback = update_dashboard_active_column,
-	})
-	vim.api.nvim_set_hl(0, "OctoProjectActiveColumn", { link = "Visual", default = true })
-	vim.api.nvim_set_hl(0, "OctoProjectIssue", { link = "DiagnosticInfo", default = true })
-	vim.api.nvim_set_hl(0, "OctoProjectPullRequest", { link = "DiagnosticHint", default = true })
-	vim.api.nvim_set_hl(0, "OctoProjectCardClosed", { link = "Comment", default = true })
 	render_project_dashboard()
 end
 
