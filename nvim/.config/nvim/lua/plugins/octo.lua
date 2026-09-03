@@ -3037,7 +3037,7 @@ local function render_project_dashboard()
 		string.format("  %d items%s%s", #project_dashboard.items,
 			project_dashboard.filter ~= "" and "  ·  filter: " .. project_dashboard.filter or "",
 			project_dashboard.loading and "  ·  refreshing…" or ""),
-		"  <CR> open   a add issue   s move   / filter   r refresh   gx browser   q close",
+		"  <CR> open   p preview   a add issue   s move   / filter   r refresh   gx browser   q close",
 		"",
 	}
 	project_dashboard.row_cells = {}
@@ -3331,6 +3331,93 @@ local function open_dashboard_item()
 	map("ad", "<cmd>Octo assignee remove<CR>", "Remove GitHub assignee")
 end
 
+local function preview_dashboard_item()
+	local item = dashboard_item_at_cursor()
+	local content = item and item.content
+	if not content or not content.id then
+		vim.notify("Move the cursor onto a project card first", vim.log.levels.WARN)
+		return
+	end
+	local query = [[
+query($id: ID!) {
+  node(id: $id) {
+    __typename
+    ... on Issue {
+      number title body state repository { nameWithOwner }
+      labels(first: 20) { nodes { name } }
+      assignees(first: 20) { nodes { login } }
+      comments(last: 3) { nodes { author { login } body createdAt } }
+    }
+    ... on PullRequest {
+      number title body state repository { nameWithOwner }
+      labels(first: 20) { nodes { name } }
+      assignees(first: 20) { nodes { login } }
+      comments(last: 3) { nodes { author { login } body createdAt } }
+    }
+    ... on DraftIssue { title body }
+  }
+}
+]]
+	local gh = require("octo.gh")
+	vim.notify("Loading card preview…", vim.log.levels.INFO)
+	gh.api.graphql({
+		f = { query = query, id = content.id },
+		opts = { cb = gh.create_callback({ success = function(output)
+			local ok, response = pcall(vim.json.decode, output)
+			local issue = ok and vim.tbl_get(response, "data", "node") or nil
+			if not issue then
+				vim.notify("Could not load project card preview", vim.log.levels.ERROR)
+				return
+			end
+			local repo = vim.tbl_get(issue, "repository", "nameWithOwner") or "Draft issue"
+			local labels = vim.tbl_map(function(label) return label.name end, vim.tbl_get(issue, "labels", "nodes") or {})
+			local assignees = vim.tbl_map(function(assignee) return "@" .. assignee.login end,
+				vim.tbl_get(issue, "assignees", "nodes") or {})
+			local lines = {
+				"# " .. (issue.title or "Untitled"), "",
+				string.format("**%s%s** · %s", repo, issue.number and "#" .. issue.number or "", issue.state or "DRAFT"),
+				"**Labels:** " .. (#labels > 0 and table.concat(labels, ", ") or "none"),
+				"**Assignees:** " .. (#assignees > 0 and table.concat(assignees, ", ") or "none"), "",
+			}
+			vim.list_extend(lines, vim.split(issue.body or "_No description_", "\n", { plain = true }))
+			local comments = vim.tbl_get(issue, "comments", "nodes") or {}
+			if #comments > 0 then
+				table.insert(lines, "")
+				table.insert(lines, "## Latest comments")
+				for _, comment in ipairs(comments) do
+					table.insert(lines, "")
+					table.insert(lines, string.format("### @%s · %s", vim.tbl_get(comment, "author", "login") or "ghost",
+						(comment.createdAt or ""):gsub("T", " "):gsub("Z$", " UTC")))
+					vim.list_extend(lines, vim.split(comment.body or "", "\n", { plain = true }))
+				end
+			end
+			local width = math.max(60, math.floor(vim.o.columns * 0.7))
+			local height = math.max(16, math.floor(vim.o.lines * 0.7))
+			local bufnr = vim.api.nvim_create_buf(false, true)
+			local winid = vim.api.nvim_open_win(bufnr, true, {
+				relative = "editor", width = width, height = height,
+				row = math.floor((vim.o.lines - height) / 2) - 1,
+				col = math.floor((vim.o.columns - width) / 2), style = "minimal", border = "rounded",
+				title = " Preview · <CR> edit · q close ", title_pos = "center",
+			})
+			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+			vim.bo[bufnr].buftype = "nofile"
+			vim.bo[bufnr].bufhidden = "wipe"
+			vim.bo[bufnr].swapfile = false
+			vim.bo[bufnr].filetype = "markdown"
+			vim.bo[bufnr].modifiable = false
+			vim.wo[winid].wrap = true
+			vim.wo[winid].linebreak = true
+			vim.keymap.set("n", "q", function() vim.api.nvim_win_close(winid, true) end,
+				{ buffer = bufnr, silent = true, desc = "Close project card preview" })
+			vim.keymap.set("n", "<CR>", function()
+				vim.api.nvim_win_close(winid, true)
+				open_dashboard_item()
+			end, { buffer = bufnr, silent = true, desc = "Edit project card" })
+		end }) },
+	})
+end
+
 local function move_dashboard_item()
 	local item = dashboard_item_at_cursor()
 	if not item then
@@ -3589,6 +3676,7 @@ local function open_project_dashboard_buffer(project, items)
 		vim.keymap.set("n", lhs, rhs, { buffer = bufnr, silent = true, desc = desc })
 	end
 	map("<CR>", open_dashboard_item, "Open project item in Octo")
+	map("p", preview_dashboard_item, "Preview project item")
 	map("a", function()
 		add_dashboard_issue(dashboard_status_at_cursor())
 	end, "Add issue to GitHub project")
