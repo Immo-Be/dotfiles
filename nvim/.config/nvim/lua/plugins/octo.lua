@@ -3095,7 +3095,7 @@ local function project_card_rail_group(content, project_status)
 	return "OctoProjectRailBlue"
 end
 
-local function render_project_card(item, project_status, width, now, project_title)
+local function render_project_card(item, project_status, width, now)
 	width = math.max(8, width)
 	local content = item.content or {}
 	local inner_width = width - 2
@@ -3109,7 +3109,7 @@ local function render_project_card(item, project_status, width, now, project_tit
 
 	local labels = vim.tbl_get(content, "labels", "nodes") or {}
 	local milestone = vim.tbl_get(content, "milestone", "title")
-	local context = milestone or project_title or "no project"
+	local context = milestone
 	local second_parts = {}
 	local label_ranges = {}
 	if #labels == 0 then
@@ -3127,12 +3127,14 @@ local function render_project_card(item, project_status, width, now, project_tit
 		end
 	end
 	local label_text = table.concat(second_parts)
-	local second_text = label_text .. "  " .. context
+	local second_text = label_text .. (context and "  " .. context or "")
 	local second = rail .. pad_display(second_text, inner_width)
 
 	local state = (content.state or "open"):lower()
 	local assignee = vim.tbl_get(content, "assignees", "nodes", 1, "login")
-	local left = string.format("%s · %s", state, assignee and "@" .. assignee or "unassigned")
+	local assignee_text = assignee and "@" .. assignee or "unassigned"
+	local status_separator = " · "
+	local left = state .. status_separator .. assignee_text
 	local age = project_updated_age(content.updatedAt, now)
 	local left_width = math.max(1, inner_width - vim.fn.strdisplaywidth(age) - 1)
 	left = truncate_display(left, left_width)
@@ -3149,17 +3151,21 @@ local function render_project_card(item, project_status, width, now, project_tit
 		{ row = 1, start_col = #rail, end_col = #rail + #number, group = "OctoProjectCardMuted" },
 		{ row = 1, start_col = #rail + #number + 2, end_col = #rail + #number + 2 + #title, group = "OctoProjectCardTitle" },
 		{ row = 3, start_col = #rail, end_col = #rail + #state, group = "OctoProjectCardStatus" },
+		{ row = 3, start_col = #rail + #state + #status_separator,
+			end_col = math.min(#third, #rail + #state + #status_separator + #assignee_text), group = "OctoProjectCardMuted" },
 		{ row = 3, start_col = #third - #age, end_col = #third, group = "OctoProjectCardMuted" },
 	}
 	vim.list_extend(highlights, label_ranges)
 	if #labels == 0 then
 		table.insert(highlights, { row = 2, start_col = #rail, end_col = #rail + #label_text, group = "OctoProjectCardMuted" })
 	end
-	local context_start = #rail + #label_text + 2
-	table.insert(highlights, {
-		row = 2, start_col = context_start, end_col = math.min(#second, context_start + #context),
-		group = "OctoProjectCardContext",
-	})
+	if context then
+		local context_start = #rail + #label_text + 2
+		table.insert(highlights, {
+			row = 2, start_col = context_start, end_col = math.min(#second, context_start + #context),
+			group = "OctoProjectCardContext",
+		})
+	end
 	return {
 		lines = { first, second, third },
 		highlights = highlights,
@@ -3282,7 +3288,7 @@ local function render_project_dashboard()
 			local item = (grouped[column.name] or {})[row]
 			local rendered_lines = {}
 			if item then
-				local card = render_project_card(item, column.name, width - 1, nil, project.title)
+				local card = render_project_card(item, column.name, width - 1)
 				rendered_lines = {
 					"┌" .. string.rep("─", width - 2) .. "┐",
 					card.lines[1] .. "│",
@@ -3363,8 +3369,13 @@ local function render_project_dashboard()
 			local red = math.floor(numeric / 0x10000) % 0x100
 			local green = math.floor(numeric / 0x100) % 0x100
 			local blue = numeric % 0x100
-			local foreground = (red * 299 + green * 587 + blue * 114) / 1000 > 150 and "#303446" or "#c6d0f5"
-			vim.api.nvim_set_hl(0, highlight.group, { bg = "#" .. color, fg = foreground })
+			local background = { red = 48, green = 52, blue = 70 }
+			local mix = 0.25
+			local muted = string.format("#%02x%02x%02x",
+				math.floor(background.red * (1 - mix) + red * mix),
+				math.floor(background.green * (1 - mix) + green * mix),
+				math.floor(background.blue * (1 - mix) + blue * mix))
+			vim.api.nvim_set_hl(0, highlight.group, { bg = muted, fg = "#c6d0f5" })
 		end
 		vim.api.nvim_buf_set_extmark(bufnr, project_dashboard_ns, highlight.row - 1, highlight.start_col, {
 			end_col = highlight.end_col,
@@ -4200,11 +4211,11 @@ local function open_project_dashboard_buffer(project, items, repositories)
 		vim.notify(string.format("%s is now the default project for %s", project.title, repo), vim.log.levels.INFO)
 	end, "Set default GitHub project")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
-	vim.api.nvim_set_hl(0, "OctoProjectCardOutline", { fg = "#c6d0f5", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardOutline", { fg = "#626880", default = true })
 	vim.api.nvim_set_hl(0, "OctoProjectCardMuted", { link = "Comment", default = true })
-	vim.api.nvim_set_hl(0, "OctoProjectCardTitle", { bold = true, default = true })
-	vim.api.nvim_set_hl(0, "OctoProjectCardContext", { link = "Identifier", default = true })
-	vim.api.nvim_set_hl(0, "OctoProjectCardStatus", { link = "DiagnosticInfo", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardTitle", { fg = "#f2f4ff", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardContext", { link = "Comment", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardStatus", { fg = "#8caaee", default = true })
 	vim.api.nvim_set_hl(0, "OctoProjectRailRed", { fg = "#e78284", bold = true, default = true })
 	vim.api.nvim_set_hl(0, "OctoProjectRailYellow", { fg = "#e5c890", bold = true, default = true })
 	vim.api.nvim_set_hl(0, "OctoProjectRailGreen", { fg = "#a6d189", bold = true, default = true })
