@@ -5,6 +5,36 @@ local notification_poll_running = false
 local notification_baseline_ready = false
 local notification_versions = {}
 local notification_last_error
+local notification_scope_key
+local active_board_items = {}
+local board_snapshots = {}
+local poll_active_project_board
+local project_defaults_path = vim.fn.stdpath("data") .. "/octo-project-defaults.json"
+
+local function load_project_defaults()
+	if vim.fn.filereadable(project_defaults_path) ~= 1 then return {} end
+	local ok, defaults = pcall(vim.json.decode, table.concat(vim.fn.readfile(project_defaults_path), "\n"))
+	return ok and type(defaults) == "table" and defaults or {}
+end
+
+local project_defaults = load_project_defaults()
+
+local function save_project_defaults()
+	vim.fn.mkdir(vim.fn.fnamemodify(project_defaults_path, ":h"), "p")
+	vim.fn.writefile({ vim.json.encode(project_defaults) }, project_defaults_path)
+end
+
+local function active_repo_name()
+	local ok, repo = pcall(require("octo.utils").get_remote_name)
+	return ok and repo or nil
+end
+
+local function notification_item_key(notification)
+	local repo = vim.tbl_get(notification, "repository", "full_name")
+	local number = vim.tbl_get(notification, "subject", "url")
+		and vim.tbl_get(notification, "subject", "url"):match("/(%d+)$")
+	return repo and number and repo:lower() .. "#" .. number or nil
+end
 
 local function decode_notification_pages(data)
 	local ok, pages = pcall(vim.json.decode, data)
@@ -65,7 +95,17 @@ local function poll_github_notifications(notify_when_unchanged)
 				if not notifications then
 					return
 				end
+				notifications = vim.tbl_filter(function(notification)
+					local key = notification_item_key(notification)
+					return key and active_board_items[key] == true
+				end, notifications)
 				notification_last_error = nil
+				local scope_key = active_repo_name()
+				if notification_scope_key ~= scope_key then
+					notification_scope_key = scope_key
+					notification_versions = {}
+					notification_baseline_ready = false
+				end
 				local changed = {}
 				local current_versions = {}
 				for _, notification in ipairs(notifications) do
@@ -108,7 +148,11 @@ local function start_github_notification_polling()
 		return
 	end
 	notification_timer:start(0, 60000, vim.schedule_wrap(function()
-		poll_github_notifications(false)
+		if poll_active_project_board then
+			poll_active_project_board(false, function() poll_github_notifications(false) end)
+		else
+			poll_github_notifications(false)
+		end
 	end))
 end
 
@@ -3006,34 +3050,120 @@ local function display_slice(value, width)
 	return result .. "…" .. string.rep(" ", math.max(0, width - vim.fn.strdisplaywidth(result .. "…")))
 end
 
-local function display_wrap(value, width, max_lines)
-	local wrapped = {}
-	local current = ""
-	for index = 0, vim.fn.strchars(value or "") - 1 do
-		local char = vim.fn.strcharpart(value, index, 1)
-		if vim.fn.strdisplaywidth(current .. char) > width then
-			local head, tail = current:match("^(.*)%s+(%S+)$")
-			if head and head ~= "" then
-				table.insert(wrapped, display_slice(head, width))
-				current = tail .. char
-			else
-				table.insert(wrapped, display_slice(current, width))
-				current = char
-			end
-			if #wrapped == max_lines then
-				return wrapped
-			end
-		else
-			current = current .. char
+local function truncate_display(value, width)
+	value = tostring(value or "")
+	if width <= 0 then return "" end
+	if vim.fn.strdisplaywidth(value) <= width then return value end
+	local ellipsis = width >= 3 and "..." or string.rep(".", width)
+	local result = ""
+	for index = 0, vim.fn.strchars(value) - 1 do
+		local candidate = result .. vim.fn.strcharpart(value, index, 1)
+		if vim.fn.strdisplaywidth(candidate .. ellipsis) > width then break end
+		result = candidate
+	end
+	return result .. ellipsis
+end
+
+local function pad_display(value, width)
+	value = truncate_display(value, width)
+	return value .. string.rep(" ", math.max(0, width - vim.fn.strdisplaywidth(value)))
+end
+
+local function project_updated_age(updated_at, now)
+	if not updated_at or updated_at == "" then return "-" end
+	local updated = vim.fn.strptime("%Y-%m-%dT%H:%M:%SZ", updated_at)
+	if updated <= 0 then return "-" end
+	local seconds = math.max(0, (now or os.time()) - updated)
+	if seconds < 60 then return "now" end
+	if seconds < 3600 then return math.floor(seconds / 60) .. "m" end
+	if seconds < 86400 then return math.floor(seconds / 3600) .. "h" end
+	if seconds < 2592000 then return math.floor(seconds / 86400) .. "d" end
+	return math.floor(seconds / 2592000) .. "mo"
+end
+
+local function project_card_rail_group(content, project_status)
+	local words = { content.title or "", project_status or "" }
+	for _, label in ipairs(vim.tbl_get(content, "labels", "nodes") or {}) do table.insert(words, label.name or "") end
+	local value = table.concat(words, " "):lower()
+	if value:find("bug", 1, true) or value:find("urgent", 1, true) or value:find("critical", 1, true) then
+		return "OctoProjectRailRed"
+	elseif value:find("blocked", 1, true) then
+		return "OctoProjectRailYellow"
+	elseif value:find("ready", 1, true) then
+		return "OctoProjectRailGreen"
+	end
+	return "OctoProjectRailBlue"
+end
+
+local function render_project_card(item, project_status, width, now, project_title)
+	width = math.max(8, width)
+	local content = item.content or {}
+	local inner_width = width - 2
+	local rail = "│ "
+	local number = content.number and "#" .. content.number or "Draft"
+	local number_width = math.min(vim.fn.strdisplaywidth(number), math.max(1, inner_width - 4))
+	number = truncate_display(number, number_width)
+	local title_width = math.max(1, inner_width - vim.fn.strdisplaywidth(number) - 2)
+	local title = truncate_display(content.title or "Untitled", title_width)
+	local first = rail .. pad_display(number .. "  " .. title, inner_width)
+
+	local labels = vim.tbl_get(content, "labels", "nodes") or {}
+	local milestone = vim.tbl_get(content, "milestone", "title")
+	local context = milestone or project_title or "no project"
+	local second_parts = {}
+	local label_ranges = {}
+	if #labels == 0 then
+		table.insert(second_parts, "no labels")
+	else
+		for _, label in ipairs(labels) do
+			local prefix = #second_parts > 0 and "  " or ""
+			local start_col = #rail + #table.concat(second_parts) + #prefix
+			table.insert(second_parts, prefix .. (label.name or "label"))
+			table.insert(label_ranges, {
+				row = 2, start_col = start_col, end_col = start_col + #(label.name or "label"),
+				group = "OctoProjectLabel_" .. ((label.color or "6e7681"):lower()),
+				color = label.color or "6e7681",
+			})
 		end
 	end
-	if #wrapped < max_lines then
-		table.insert(wrapped, display_slice(vim.trim(current), width))
+	local label_text = table.concat(second_parts)
+	local second_text = label_text .. "  " .. context
+	local second = rail .. pad_display(second_text, inner_width)
+
+	local state = (content.state or "open"):lower()
+	local assignee = vim.tbl_get(content, "assignees", "nodes", 1, "login")
+	local left = string.format("%s · %s", state, assignee and "@" .. assignee or "unassigned")
+	local age = project_updated_age(content.updatedAt, now)
+	local left_width = math.max(1, inner_width - vim.fn.strdisplaywidth(age) - 1)
+	left = truncate_display(left, left_width)
+	local spaces = math.max(1, inner_width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(age))
+	local third = rail .. left .. string.rep(" ", spaces) .. age
+	third = pad_display(third, width)
+
+	local rail_group = project_card_rail_group(content, project_status)
+	local rail_end = #"│"
+	local highlights = {
+		{ row = 1, start_col = 0, end_col = rail_end, group = rail_group },
+		{ row = 2, start_col = 0, end_col = rail_end, group = rail_group },
+		{ row = 3, start_col = 0, end_col = rail_end, group = rail_group },
+		{ row = 1, start_col = #rail, end_col = #rail + #number, group = "OctoProjectCardMuted" },
+		{ row = 1, start_col = #rail + #number + 2, end_col = #rail + #number + 2 + #title, group = "OctoProjectCardTitle" },
+		{ row = 3, start_col = #rail, end_col = #rail + #state, group = "OctoProjectCardStatus" },
+		{ row = 3, start_col = #third - #age, end_col = #third, group = "OctoProjectCardMuted" },
+	}
+	vim.list_extend(highlights, label_ranges)
+	if #labels == 0 then
+		table.insert(highlights, { row = 2, start_col = #rail, end_col = #rail + #label_text, group = "OctoProjectCardMuted" })
 	end
-	while #wrapped < max_lines do
-		table.insert(wrapped, string.rep(" ", width))
-	end
-	return wrapped
+	local context_start = #rail + #label_text + 2
+	table.insert(highlights, {
+		row = 2, start_col = context_start, end_col = math.min(#second, context_start + #context),
+		group = "OctoProjectCardContext",
+	})
+	return {
+		lines = { first, second, third },
+		highlights = highlights,
+	}
 end
 
 local function project_item_status(item, field_id)
@@ -3117,8 +3247,9 @@ local function render_project_dashboard()
 		end)
 	end
 
-	local width = 34
-	local content_width = width - 2
+	local dashboard_win = vim.fn.bufwinid(bufnr)
+	local available_width = dashboard_win ~= -1 and vim.api.nvim_win_get_width(dashboard_win) or 80
+	local width = math.max(24, math.min(52, available_width - 4))
 	local gap = "  "
 	local lines = {
 		string.format("  %s  ·  %s", project.title, project.owner.login),
@@ -3129,6 +3260,7 @@ local function render_project_dashboard()
 		"",
 	}
 	project_dashboard.row_cells = {}
+	local card_highlights = {}
 
 	local headers = {}
 	local rules = {}
@@ -3136,7 +3268,7 @@ local function render_project_dashboard()
 	for _, column in ipairs(columns) do
 		local header = display_slice(string.format(" %s (%d)", column.name, #(grouped[column.name] or {})), width)
 		table.insert(headers, header)
-		table.insert(rules, string.rep("─", width))
+		table.insert(rules, string.rep("-", width))
 		max_items = math.max(max_items, #(grouped[column.name] or {}))
 	end
 	table.insert(lines, table.concat(headers, gap))
@@ -3150,29 +3282,48 @@ local function render_project_dashboard()
 			local item = (grouped[column.name] or {})[row]
 			local rendered_lines = {}
 			if item then
-				local content = item.content
-				local metadata = {}
-				if content.__typename == "PullRequest" then
-					table.insert(metadata, "PR")
-				elseif content.__typename == "DraftIssue" then
-					table.insert(metadata, "draft")
-				end
-				local assignee = vim.tbl_get(content, "assignees", "nodes", 1, "login")
-				if assignee then table.insert(metadata, "@" .. assignee) end
-				for _, item_label in ipairs(vim.tbl_get(content, "labels", "nodes") or {}) do
-					table.insert(metadata, item_label.name)
-				end
-				local title_lines = display_wrap(string.format("%s %s",
-					content.number and "#" .. content.number or "Draft",
-					content.title or "Untitled"), content_width, 2)
-				local metadata_line = display_slice(#metadata > 0 and table.concat(metadata, " · ") or "", content_width)
+				local card = render_project_card(item, column.name, width - 1, nil, project.title)
 				rendered_lines = {
-					"╭" .. string.rep("─", content_width) .. "╮",
-					"│" .. title_lines[1] .. "│",
-					"│" .. title_lines[2] .. "│",
-					"│" .. metadata_line .. "│",
-					"╰" .. string.rep("─", content_width) .. "╯",
+					"┌" .. string.rep("─", width - 2) .. "┐",
+					card.lines[1] .. "│",
+					card.lines[2] .. "│",
+					card.lines[3] .. "│",
+					"└" .. string.rep("─", width - 2) .. "┘",
 				}
+				table.insert(card_highlights, {
+					row = #lines + 1, start_col = byte_cols[1], end_col = byte_cols[1] + #rendered_lines[1],
+					group = "OctoProjectCardOutline",
+				})
+				table.insert(card_highlights, {
+					row = #lines + 5, start_col = byte_cols[5], end_col = byte_cols[5] + #rendered_lines[5],
+					group = "OctoProjectCardOutline",
+				})
+				for line_index = 2, 4 do
+					table.insert(card_highlights, {
+						row = #lines + line_index,
+						start_col = byte_cols[line_index] + #rendered_lines[line_index] - #"│",
+						end_col = byte_cols[line_index] + #rendered_lines[line_index],
+						group = "OctoProjectCardOutline",
+					})
+				end
+				local rail_group = card.highlights[1].group
+				for _, line_index in ipairs({ 1, 5 }) do
+					table.insert(card_highlights, {
+						row = #lines + line_index,
+						start_col = byte_cols[line_index],
+						end_col = byte_cols[line_index] + #(line_index == 1 and "┌" or "└"),
+						group = rail_group,
+					})
+				end
+				for _, highlight in ipairs(card.highlights) do
+					table.insert(card_highlights, {
+						row = #lines + highlight.row + 1,
+						start_col = byte_cols[highlight.row + 1] + highlight.start_col,
+						end_col = byte_cols[highlight.row + 1] + highlight.end_col,
+						group = highlight.group,
+						color = highlight.color,
+					})
+				end
 			else
 				for _ = 1, 5 do table.insert(rendered_lines, string.rep(" ", width)) end
 			end
@@ -3191,6 +3342,7 @@ local function render_project_dashboard()
 			table.insert(lines, table.concat(card_lines[line_index], gap))
 			project_dashboard.row_cells[#lines] = line_cells[line_index]
 		end
+		if row < max_items then table.insert(lines, "") end
 	end
 	if max_items == 0 then
 		table.insert(lines, "  No project items match the current filter.")
@@ -3204,6 +3356,22 @@ local function render_project_dashboard()
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 1, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 2, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoStateOpen", 4, 0, -1)
+	for _, highlight in ipairs(card_highlights) do
+		if highlight.color then
+			local color = highlight.color:gsub("^#", "")
+			local numeric = tonumber(color, 16) or 0
+			local red = math.floor(numeric / 0x10000) % 0x100
+			local green = math.floor(numeric / 0x100) % 0x100
+			local blue = numeric % 0x100
+			local foreground = (red * 299 + green * 587 + blue * 114) / 1000 > 150 and "#303446" or "#c6d0f5"
+			vim.api.nvim_set_hl(0, highlight.group, { bg = "#" .. color, fg = foreground })
+		end
+		vim.api.nvim_buf_set_extmark(bufnr, project_dashboard_ns, highlight.row - 1, highlight.start_col, {
+			end_col = highlight.end_col,
+			hl_group = highlight.group,
+			priority = 20,
+		})
+	end
 	local focus_target
 	if project_dashboard.focus_item_id then
 		for line, cells in pairs(project_dashboard.row_cells) do
@@ -3232,14 +3400,16 @@ query($id: ID!, $after: String) {
           content {
             __typename
             ... on Issue {
-              id number title state url repository { nameWithOwner }
-              labels(first: 2) { nodes { name } }
+              id number title state updatedAt url repository { nameWithOwner }
+              labels(first: 3) { nodes { name color } }
               assignees(first: 20) { nodes { login } }
+              milestone { title }
             }
             ... on PullRequest {
-              id number title state url repository { nameWithOwner }
-              labels(first: 2) { nodes { name } }
+              id number title state updatedAt url repository { nameWithOwner }
+              labels(first: 3) { nodes { name color } }
               assignees(first: 20) { nodes { login } }
+              milestone { title }
             }
             ... on DraftIssue { id title }
           }
@@ -3369,6 +3539,7 @@ local function fetch_project_items(project, done, cursor, accumulated)
 				local items = ok and vim.tbl_get(response, "data", "node", "items") or nil
 				if not items then
 					vim.notify("Could not read GitHub project items", vim.log.levels.ERROR)
+					done(accumulated or {}, true)
 					return
 				end
 				accumulated = accumulated or {}
@@ -3381,10 +3552,70 @@ local function fetch_project_items(project, done, cursor, accumulated)
 			end,
 			failure = function(stderr)
 				vim.notify("Could not load GitHub project. Ensure gh has the read:project scope.\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
-				done(accumulated or {})
+				done(accumulated or {}, true)
 			end,
 		}) },
 	})
+end
+
+poll_active_project_board = function(notify_when_unchanged, done)
+	done = done or function() end
+	local repo = active_repo_name()
+	local project = repo and project_defaults[repo] or nil
+	if not project then
+		active_board_items = {}
+		if notify_when_unchanged then
+			vim.notify("No default GitHub project configured for " .. (repo or "this directory"), vim.log.levels.INFO)
+		end
+		done()
+		return
+	end
+	fetch_project_items(project, function(items, failed)
+		if failed then
+			done()
+			return
+		end
+		local scope = repo .. "|" .. project.id
+		local previous = board_snapshots[scope]
+		local current = {}
+		local membership = {}
+		local changes = {}
+		for _, item in ipairs(items) do
+			local content = item.content
+			local item_repo = content and vim.tbl_get(content, "repository", "nameWithOwner")
+			if content and item_repo and content.number then
+				local key = item_repo:lower() .. "#" .. content.number
+				local status = project_item_status(item, project.columns.id)
+				current[key] = {
+					title = content.title or "Untitled",
+					status = status,
+					version = content.updatedAt or "",
+				}
+				membership[key] = true
+				if previous and not previous[key] then
+					table.insert(changes, string.format("Added %s · %s", key, current[key].title))
+				elseif previous and (previous[key].status ~= status or previous[key].version ~= current[key].version) then
+					local detail = previous[key].status ~= status
+						and string.format("%s → %s", previous[key].status, status) or "issue updated"
+					table.insert(changes, string.format("%s · %s · %s", key, current[key].title, detail))
+				end
+			end
+		end
+		if previous then
+			for key, old in pairs(previous) do
+				if not current[key] then table.insert(changes, string.format("Removed %s · %s", key, old.title)) end
+			end
+		end
+		board_snapshots[scope] = current
+		active_board_items = membership
+		for _, message in ipairs(changes) do
+			vim.notify(message, vim.log.levels.INFO, { title = project.title })
+		end
+		if notify_when_unchanged and #changes == 0 then
+			vim.notify("No new activity in " .. project.title, vim.log.levels.INFO)
+		end
+		done()
+	end)
 end
 
 local project_repositories_query = [[
@@ -3950,10 +4181,62 @@ local function open_project_dashboard_buffer(project, items, repositories)
 			{ "<CR>", "open issue or PR editor" }, { "p", "preview card details" },
 			{ "a", "create issue in current column" }, { "s", "move card to another status" },
 			{ "/", "filter cards; @me means assigned to me" }, { "r", "refresh project" },
+			{ "D", "make this the repository default" },
 			{ "gx", "open card or project in browser" }, { "q", "close dashboard" },
 		}) end, "Show project dashboard help")
+	map("D", function()
+		local repo = active_repo_name()
+		if not repo then
+			vim.notify("Could not determine the current repository", vim.log.levels.ERROR)
+			return
+		end
+		project_defaults[repo] = {
+			id = project.id, title = project.title, url = project.url, number = project.number,
+			owner = { login = project.owner.login }, columns = vim.deepcopy(project.columns),
+		}
+		save_project_defaults()
+		board_snapshots[repo .. "|" .. project.id] = nil
+		notification_scope_key = nil
+		vim.notify(string.format("%s is now the default project for %s", project.title, repo), vim.log.levels.INFO)
+	end, "Set default GitHub project")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
+	vim.api.nvim_set_hl(0, "OctoProjectCardOutline", { fg = "#c6d0f5", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardMuted", { link = "Comment", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardTitle", { bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardContext", { link = "Identifier", default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectCardStatus", { link = "DiagnosticInfo", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectRailRed", { fg = "#e78284", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectRailYellow", { fg = "#e5c890", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectRailGreen", { fg = "#a6d189", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "OctoProjectRailBlue", { fg = "#8caaee", bold = true, default = true })
 	render_project_dashboard()
+end
+
+local function load_project_dashboard(project)
+	vim.notify("Loading " .. project.title .. "…", vim.log.levels.INFO)
+	fetch_project_items(project, function(items)
+		fetch_project_repositories(project, function(repositories)
+			open_project_dashboard_buffer(project, items, repositories)
+		end)
+	end)
+end
+
+local function set_current_project_as_default()
+	if not project_dashboard.project or vim.api.nvim_get_current_buf() ~= project_dashboard.bufnr then
+		vim.notify("Open the desired project dashboard first, then run this command", vim.log.levels.WARN)
+		return
+	end
+	local repo = active_repo_name()
+	if not repo then return end
+	local project = project_dashboard.project
+	project_defaults[repo] = {
+		id = project.id, title = project.title, url = project.url, number = project.number,
+		owner = { login = project.owner.login }, columns = vim.deepcopy(project.columns),
+	}
+	save_project_defaults()
+	board_snapshots[repo .. "|" .. project.id] = nil
+	notification_scope_key = nil
+	vim.notify(string.format("%s is now the default project for %s", project.title, repo), vim.log.levels.INFO)
 end
 
 local function open_project_dashboard()
@@ -3961,6 +4244,10 @@ local function open_project_dashboard()
 	local repo = utils.get_remote_name()
 	if not repo then
 		vim.notify("Could not determine the current GitHub repository", vim.log.levels.ERROR)
+		return
+	end
+	if project_defaults[repo] then
+		load_project_dashboard(project_defaults[repo])
 		return
 	end
 	local owner, name = utils.split_repo(repo)
@@ -4001,12 +4288,7 @@ local function open_project_dashboard()
 						return string.format("%s/%d · %s", project.owner.login, project.number, project.title)
 					end }, function(project)
 						if project then
-							vim.notify("Loading " .. project.title .. "…", vim.log.levels.INFO)
-							fetch_project_items(project, function(items)
-								fetch_project_repositories(project, function(repositories)
-									open_project_dashboard_buffer(project, items, repositories)
-								end)
-							end)
+							load_project_dashboard(project)
 						end
 					end)
 				end
@@ -4177,6 +4459,26 @@ function M.setup()
 	vim.api.nvim_create_user_command("OctoProjectDashboard", open_project_dashboard, {
 		desc = "Open a GitHub Projects v2 dashboard",
 	})
+	vim.api.nvim_create_user_command("OctoProjectDefaultSet", set_current_project_as_default, {
+		desc = "Use the open GitHub project as this repository's default",
+	})
+	vim.api.nvim_create_user_command("OctoProjectDefaultClear", function()
+		local repo = active_repo_name()
+		if not repo or not project_defaults[repo] then
+			vim.notify("No default GitHub project is configured for this repository", vim.log.levels.INFO)
+			return
+		end
+		project_defaults[repo] = nil
+		save_project_defaults()
+		active_board_items = {}
+		vim.notify("Cleared the default GitHub project for " .. repo, vim.log.levels.INFO)
+	end, { desc = "Clear this repository's default GitHub project" })
+	vim.api.nvim_create_user_command("OctoProjectDefaultShow", function()
+		local repo = active_repo_name()
+		local project = repo and project_defaults[repo] or nil
+		vim.notify(project and string.format("%s → %s/%d · %s", repo, project.owner.login, project.number, project.title)
+			or "No default GitHub project is configured for " .. (repo or "this directory"), vim.log.levels.INFO)
+	end, { desc = "Show this repository's default GitHub project" })
 	vim.api.nvim_create_user_command("GitHubNotificationsStart", start_github_notification_polling, {
 		desc = "Start polling unread GitHub notifications",
 	})
@@ -4184,7 +4486,7 @@ function M.setup()
 		stop_github_notification_polling(true)
 	end, { desc = "Stop polling GitHub notifications" })
 	vim.api.nvim_create_user_command("GitHubNotificationsPoll", function()
-		poll_github_notifications(true)
+		poll_active_project_board(true, function() poll_github_notifications(false) end)
 	end, { desc = "Check GitHub notifications now" })
 	vim.api.nvim_create_user_command("GitHubNotificationsStatus", function()
 		vim.notify(
@@ -4227,5 +4529,11 @@ function M.setup()
 		end,
 	})
 end
+
+M._project_card_test = {
+	render = render_project_card,
+	truncate = truncate_display,
+	age = project_updated_age,
+}
 
 return M
