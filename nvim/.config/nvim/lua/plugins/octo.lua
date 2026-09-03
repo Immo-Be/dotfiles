@@ -2956,6 +2956,7 @@ local project_dashboard = {
 	row_cells = {},
 	columns = {},
 	filter = "",
+	loading = false,
 }
 
 local project_dashboard_ns = vim.api.nvim_create_namespace("OctoProjectDashboard")
@@ -3032,8 +3033,9 @@ local function render_project_dashboard()
 	local gap = "  "
 	local lines = {
 		string.format("  %s  ·  %s", project.title, project.owner.login),
-		string.format("  %d items%s", #project_dashboard.items,
-			project_dashboard.filter ~= "" and "  ·  filter: " .. project_dashboard.filter or ""),
+		string.format("  %d items%s%s", #project_dashboard.items,
+			project_dashboard.filter ~= "" and "  ·  filter: " .. project_dashboard.filter or "",
+			project_dashboard.loading and "  ·  refreshing…" or ""),
 		"  <CR> open   a add issue   s move   / filter   r refresh   gx browser   q close",
 		"",
 	}
@@ -3239,6 +3241,7 @@ local function fetch_project_items(project, done, cursor, accumulated)
 			end,
 			failure = function(stderr)
 				vim.notify("Could not load GitHub project. Ensure gh has the read:project scope.\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
+				done(accumulated or {})
 			end,
 		}) },
 	})
@@ -3248,9 +3251,11 @@ local function refresh_project_dashboard()
 	if not project_dashboard.project then
 		return
 	end
-	vim.notify("Refreshing GitHub project…", vim.log.levels.INFO)
+	project_dashboard.loading = true
+	render_project_dashboard()
 	fetch_project_items(project_dashboard.project, function(items)
 		project_dashboard.items = items
+		project_dashboard.loading = false
 		render_project_dashboard()
 	end)
 end
@@ -3538,6 +3543,7 @@ local function open_project_dashboard_buffer(project, items)
 	project_dashboard.project = project
 	project_dashboard.items = items
 	project_dashboard.filter = ""
+	project_dashboard.loading = false
 	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].bufhidden = "wipe"
 	vim.bo[bufnr].swapfile = false
@@ -3583,6 +3589,7 @@ local function open_project_dashboard()
 	end
 	local owner, name = utils.split_repo(repo)
 	local gh = require("octo.gh")
+	vim.notify("Loading GitHub projects…", vim.log.levels.INFO)
 	gh.api.graphql({
 		query = project_dashboard_query,
 		F = { owner = owner, name = name },
@@ -3618,6 +3625,7 @@ local function open_project_dashboard()
 						return string.format("%s/%d · %s", project.owner.login, project.number, project.title)
 					end }, function(project)
 						if project then
+							vim.notify("Loading " .. project.title .. "…", vim.log.levels.INFO)
 							fetch_project_items(project, function(items)
 								open_project_dashboard_buffer(project, items)
 							end)
