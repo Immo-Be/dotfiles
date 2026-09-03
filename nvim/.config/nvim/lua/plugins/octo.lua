@@ -2949,6 +2949,704 @@ local function open_current_octo_url()
 	open_url(url)
 end
 
+local project_dashboard = {
+	bufnr = nil,
+	project = nil,
+	items = {},
+	row_cells = {},
+	columns = {},
+	filter = "",
+}
+
+local project_dashboard_ns = vim.api.nvim_create_namespace("OctoProjectDashboard")
+
+local function display_slice(value, width)
+	value = value or ""
+	if vim.fn.strdisplaywidth(value) <= width then
+		return value .. string.rep(" ", width - vim.fn.strdisplaywidth(value))
+	end
+	local result = ""
+	for index = 0, vim.fn.strchars(value) - 1 do
+		local candidate = result .. vim.fn.strcharpart(value, index, 1)
+		if vim.fn.strdisplaywidth(candidate .. "…") > width then
+			break
+		end
+		result = candidate
+	end
+	return result .. "…" .. string.rep(" ", math.max(0, width - vim.fn.strdisplaywidth(result .. "…")))
+end
+
+local function project_item_status(item, field_id)
+	for _, value in ipairs(vim.tbl_get(item, "fieldValues", "nodes") or {}) do
+		if value.field and value.field.id == field_id and value.name then
+			return value.name
+		end
+	end
+	return "No status"
+end
+
+local function dashboard_item_at_cursor()
+	if vim.api.nvim_get_current_buf() ~= project_dashboard.bufnr then
+		return nil
+	end
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	for _, cell in ipairs(project_dashboard.row_cells[cursor[1]] or {}) do
+		if cursor[2] >= cell.start_col and cursor[2] < cell.end_col then
+			return cell.item
+		end
+	end
+	return nil
+end
+
+local function render_project_dashboard()
+	local bufnr = project_dashboard.bufnr
+	local project = project_dashboard.project
+	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) or not project then
+		return
+	end
+
+	local columns = vim.deepcopy(vim.tbl_get(project, "columns", "options") or {})
+	table.insert(columns, { id = false, name = "No status" })
+	project_dashboard.columns = columns
+	local grouped = {}
+	for _, column in ipairs(columns) do
+		grouped[column.name] = {}
+	end
+	for _, item in ipairs(project_dashboard.items) do
+		local content = item.content
+		local haystack = content and table.concat({ content.title or "", tostring(content.number or ""),
+			vim.tbl_get(content, "repository", "nameWithOwner") or "" }, " "):lower() or ""
+		if content and (project_dashboard.filter == "" or haystack:find(project_dashboard.filter:lower(), 1, true)) then
+			local status = project_item_status(item, project.columns.id)
+			grouped[status] = grouped[status] or {}
+			table.insert(grouped[status], item)
+		end
+	end
+	for _, items in pairs(grouped) do
+		table.sort(items, function(left, right)
+			return (left.content.number or 0) > (right.content.number or 0)
+		end)
+	end
+
+	local width = 34
+	local gap = "  "
+	local lines = {
+		string.format("  %s  ·  %s", project.title, project.owner.login),
+		string.format("  %d items%s", #project_dashboard.items,
+			project_dashboard.filter ~= "" and "  ·  filter: " .. project_dashboard.filter or ""),
+		"  <CR> open   a add issue   s move   / filter   r refresh   gx browser   q close",
+		"",
+	}
+	project_dashboard.row_cells = {}
+
+	local headers = {}
+	local rules = {}
+	local max_items = 0
+	for _, column in ipairs(columns) do
+		table.insert(headers, display_slice(string.format(" %s (%d)", column.name, #(grouped[column.name] or {})), width))
+		table.insert(rules, string.rep("─", width))
+		max_items = math.max(max_items, #(grouped[column.name] or {}))
+	end
+	table.insert(lines, table.concat(headers, gap))
+	table.insert(lines, table.concat(rules, gap))
+
+	for row = 1, max_items do
+		local cards = {}
+		local cells = {}
+		local byte_col = 0
+		for _, column in ipairs(columns) do
+			local item = (grouped[column.name] or {})[row]
+			local label = ""
+			if item then
+				local content = item.content
+				local kind = content.__typename == "PullRequest" and "PR" or (content.__typename == "DraftIssue" and "Draft" or "#")
+				label = kind == "#" and string.format(" #%d %s", content.number, content.title)
+					or string.format(" %s %s%s", kind, content.number and "#" .. content.number .. " " or "", content.title)
+			end
+			local rendered = display_slice(label, width)
+			if item then
+				table.insert(cells, { start_col = byte_col, end_col = byte_col + #rendered, item = item })
+			end
+			table.insert(cards, rendered)
+			byte_col = byte_col + #rendered + #gap
+		end
+		table.insert(lines, table.concat(cards, gap))
+		project_dashboard.row_cells[#lines] = cells
+	end
+	if max_items == 0 then
+		table.insert(lines, "  No project items match the current filter.")
+	end
+
+	vim.bo[bufnr].modifiable = true
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+	vim.bo[bufnr].modifiable = false
+	vim.api.nvim_buf_clear_namespace(bufnr, project_dashboard_ns, 0, -1)
+	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Title", 0, 0, -1)
+	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 1, 0, -1)
+	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "Comment", 2, 0, -1)
+	vim.api.nvim_buf_add_highlight(bufnr, project_dashboard_ns, "OctoStateOpen", 4, 0, -1)
+end
+
+local project_items_query = [[
+query($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on ProjectV2 {
+      items(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          content {
+            __typename
+            ... on Issue { id number title state url repository { nameWithOwner } }
+            ... on PullRequest { id number title state url repository { nameWithOwner } }
+            ... on DraftIssue { id title }
+          }
+          fieldValues(first: 50) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                optionId
+                field { ... on ProjectV2SingleSelectField { id name } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+]]
+
+local project_dashboard_query = [[
+query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    projects: projectsV2(first: 100) {
+      nodes { ...ProjectDashboard }
+    }
+  }
+  viewer {
+    projects: projectsV2(first: 100) {
+      nodes { ...ProjectDashboard }
+    }
+    organizations(first: 100) {
+      nodes {
+        login
+        projects: projectsV2(first: 100) {
+          pageInfo { hasNextPage endCursor }
+          nodes { ...ProjectDashboard }
+        }
+      }
+    }
+  }
+}
+
+fragment ProjectDashboard on ProjectV2 {
+  id
+  title
+  url
+  closed
+  number
+  owner {
+    ... on User { login }
+    ... on Organization { login }
+  }
+  columns: field(name: "Status") {
+    ... on ProjectV2SingleSelectField {
+      id
+      options { id name }
+    }
+  }
+}
+]]
+
+local organization_projects_query = [[
+query($login: String!, $after: String) {
+  organization(login: $login) {
+    projects: projectsV2(first: 100, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id
+        title
+        url
+        closed
+        number
+        owner { ... on Organization { login } }
+        columns: field(name: "Status") {
+          ... on ProjectV2SingleSelectField {
+            id
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}
+]]
+
+local function fetch_organization_project_pages(login, cursor, accumulated, done)
+	local gh = require("octo.gh")
+	local fields = { query = organization_projects_query, login = login }
+	if cursor then
+		fields.after = cursor
+	end
+	gh.api.graphql({
+		f = fields,
+		opts = { cb = gh.create_callback({
+			success = function(output)
+				local ok, response = pcall(vim.json.decode, output)
+				local connection = ok and vim.tbl_get(response, "data", "organization", "projects") or nil
+				if not connection then
+					done(accumulated)
+					return
+				end
+				vim.list_extend(accumulated, connection.nodes or {})
+				if connection.pageInfo.hasNextPage then
+					fetch_organization_project_pages(login, connection.pageInfo.endCursor, accumulated, done)
+				else
+					done(accumulated)
+				end
+			end,
+			failure = function()
+				done(accumulated)
+			end,
+		}) },
+	})
+end
+
+local function fetch_project_items(project, done, cursor, accumulated)
+	local gh = require("octo.gh")
+	local fields = { query = project_items_query, id = project.id }
+	if cursor then
+		fields.after = cursor
+	end
+	gh.api.graphql({
+		f = fields,
+		opts = { cb = gh.create_callback({
+			success = function(output)
+				local ok, response = pcall(vim.json.decode, output)
+				local items = ok and vim.tbl_get(response, "data", "node", "items") or nil
+				if not items then
+					vim.notify("Could not read GitHub project items", vim.log.levels.ERROR)
+					return
+				end
+				accumulated = accumulated or {}
+				vim.list_extend(accumulated, items.nodes or {})
+				if items.pageInfo.hasNextPage then
+					fetch_project_items(project, done, items.pageInfo.endCursor, accumulated)
+				else
+					done(accumulated)
+				end
+			end,
+			failure = function(stderr)
+				vim.notify("Could not load GitHub project. Ensure gh has the read:project scope.\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
+			end,
+		}) },
+	})
+end
+
+local function refresh_project_dashboard()
+	if not project_dashboard.project then
+		return
+	end
+	vim.notify("Refreshing GitHub project…", vim.log.levels.INFO)
+	fetch_project_items(project_dashboard.project, function(items)
+		project_dashboard.items = items
+		render_project_dashboard()
+	end)
+end
+
+local function open_dashboard_item()
+	local item = dashboard_item_at_cursor()
+	local content = item and item.content
+	local repo = content and vim.tbl_get(content, "repository", "nameWithOwner")
+	if not repo or not content.number then
+		vim.notify("This project card cannot be opened in Octo", vim.log.levels.WARN)
+		return
+	end
+	local width = math.max(60, math.floor(vim.o.columns * 0.9))
+	local height = math.max(20, math.floor(vim.o.lines * 0.85))
+	local placeholder = vim.api.nvim_create_buf(false, true)
+	local winid = vim.api.nvim_open_win(placeholder, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = math.floor((vim.o.lines - height) / 2) - 1,
+		col = math.floor((vim.o.columns - width) / 2),
+		style = "minimal",
+		border = "rounded",
+		title = string.format(" %s #%d · :w save · C comment · la/ld labels · q close ", repo, content.number),
+		title_pos = "center",
+	})
+	local utils = require("octo.utils")
+	local ok, err
+	if content.__typename == "PullRequest" then
+		ok, err = pcall(utils.get_pull_request, content.number, repo)
+	else
+		ok, err = pcall(utils.get_issue, content.number, repo)
+	end
+	if not ok then
+		if vim.api.nvim_win_is_valid(winid) then
+			vim.api.nvim_win_close(winid, true)
+		end
+		vim.notify("Could not open project item: " .. tostring(err), vim.log.levels.ERROR)
+		return
+	end
+
+	local bufnr = vim.api.nvim_get_current_buf()
+	local function map(lhs, rhs, desc)
+		vim.keymap.set("n", lhs, rhs, { buffer = bufnr, silent = true, desc = desc })
+	end
+	map("q", function()
+		if vim.api.nvim_win_is_valid(winid) then
+			vim.api.nvim_win_close(winid, true)
+		end
+	end, "Close project item popup")
+	map("C", "<cmd>Octo comment add<CR>", "Add GitHub comment")
+	map("la", "<cmd>Octo label add<CR>", "Add GitHub label")
+	map("ld", "<cmd>Octo label remove<CR>", "Remove GitHub label")
+end
+
+local function move_dashboard_item()
+	local item = dashboard_item_at_cursor()
+	if not item then
+		vim.notify("Move the cursor onto a project card first", vim.log.levels.WARN)
+		return
+	end
+	local project = project_dashboard.project
+	vim.ui.select(project.columns.options, { prompt = "Move to status:", format_item = function(option)
+		return option.name
+	end }, function(option)
+		if not option then
+			return
+		end
+		local mutation = string.format(require("octo.gh.mutations").update_project_v2_item,
+			project.id, item.id, project.columns.id, option.id)
+		local gh = require("octo.gh")
+		gh.api.graphql({ query = mutation, opts = { cb = gh.create_callback({ success = function()
+			vim.notify("Moved project card to " .. option.name, vim.log.levels.INFO)
+			refresh_project_dashboard()
+		end }) } })
+	end)
+end
+
+local function create_dashboard_issue_editor(repo, status)
+	local width = math.max(60, math.floor(vim.o.columns * 0.7))
+	local height = math.max(14, math.floor(vim.o.lines * 0.55))
+	local bufnr = vim.api.nvim_create_buf(false, true)
+	local winid = vim.api.nvim_open_win(bufnr, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = math.floor((vim.o.lines - height) / 2) - 1,
+		col = math.floor((vim.o.columns - width) / 2),
+		style = "minimal",
+		border = "rounded",
+		title = string.format(" New issue · %s · %s · first line is title · :w create ", repo, status.name),
+		title_pos = "center",
+	})
+	vim.bo[bufnr].buftype = "acwrite"
+	vim.bo[bufnr].bufhidden = "wipe"
+	vim.bo[bufnr].swapfile = false
+	vim.bo[bufnr].filetype = "markdown"
+	vim.api.nvim_buf_set_name(bufnr, "octo-project-new-issue://" .. repo)
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "", "", "" })
+	vim.bo[bufnr].modified = false
+	vim.cmd("startinsert")
+
+	local submitting = false
+	vim.api.nvim_create_autocmd("BufWriteCmd", {
+		buffer = bufnr,
+		callback = function()
+			if submitting then
+				return
+			end
+			local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+			local title = vim.trim(lines[1] or "")
+			if title == "" then
+				vim.notify("The issue title cannot be empty", vim.log.levels.WARN)
+				return
+			end
+			local body = table.concat(vim.list_slice(lines, 3), "\n")
+			local owner, name = require("octo.utils").split_repo(repo)
+			local gh = require("octo.gh")
+			submitting = true
+			gh.api.graphql({
+				query = [[query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { id } }]],
+				F = { owner = owner, name = name },
+				opts = { cb = gh.create_callback({
+					success = function(output)
+						local ok, response = pcall(vim.json.decode, output)
+						local repository_id = ok and vim.tbl_get(response, "data", "repository", "id") or nil
+						if not repository_id then
+							submitting = false
+							vim.notify("Could not resolve repository " .. repo, vim.log.levels.ERROR)
+							return
+						end
+						gh.api.graphql({
+							query = [[
+mutation($repositoryId: ID!, $title: String!, $body: String!) {
+  createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body}) {
+    issue { id number }
+  }
+}
+]],
+							f = { repositoryId = repository_id, title = title, body = body },
+							opts = { cb = gh.create_callback({
+								success = function(created_output)
+									local created_ok, created_response = pcall(vim.json.decode, created_output)
+									local issue = created_ok and vim.tbl_get(created_response, "data", "createIssue", "issue") or nil
+									if not issue then
+										submitting = false
+										vim.notify("GitHub did not return the created issue", vim.log.levels.ERROR)
+										return
+									end
+									local project = project_dashboard.project
+									local add_mutation = string.format(require("octo.gh.mutations").add_project_v2_item, issue.id, project.id)
+									gh.api.graphql({ query = add_mutation, opts = { cb = gh.create_callback({
+										success = function(added_output)
+											local added_ok, added_response = pcall(vim.json.decode, added_output)
+											local item_id = added_ok and vim.tbl_get(added_response, "data", "addProjectV2ItemById", "item", "id") or nil
+											if not item_id then
+												submitting = false
+												vim.notify(string.format("Created %s#%d, but could not add it to the project", repo, issue.number), vim.log.levels.WARN)
+												return
+											end
+											local status_mutation = string.format(require("octo.gh.mutations").update_project_v2_item,
+												project.id, item_id, project.columns.id, status.id)
+											gh.api.graphql({ query = status_mutation, opts = { cb = gh.create_callback({
+												success = function()
+													if vim.api.nvim_win_is_valid(winid) then
+														vim.api.nvim_win_close(winid, true)
+													end
+													vim.notify(string.format("Created %s#%d in %s", repo, issue.number, status.name), vim.log.levels.INFO)
+													refresh_project_dashboard()
+												end,
+												failure = function(stderr)
+													submitting = false
+													vim.notify("Issue created and added, but its status could not be set:\n" .. vim.trim(stderr or ""), vim.log.levels.WARN)
+													refresh_project_dashboard()
+												end,
+											}) } })
+										end,
+										failure = function(stderr)
+											submitting = false
+											vim.notify("Issue created, but could not be added to the project:\n" .. vim.trim(stderr or ""), vim.log.levels.WARN)
+										end,
+									}) } })
+								end,
+								failure = function(stderr)
+									submitting = false
+									vim.notify("Could not create issue:\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
+								end,
+							}) },
+						})
+					end,
+					failure = function(stderr)
+						submitting = false
+						vim.notify("Could not resolve repository:\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
+					end,
+				}) },
+			})
+		end,
+	})
+	vim.keymap.set("n", "q", function()
+		if vim.api.nvim_win_is_valid(winid) then
+			vim.api.nvim_win_close(winid, true)
+		end
+	end, { buffer = bufnr, silent = true, desc = "Cancel new GitHub issue" })
+end
+
+local function dashboard_status_at_cursor()
+	if vim.api.nvim_get_current_buf() ~= project_dashboard.bufnr then
+		return nil
+	end
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	if cursor[1] < 5 then
+		return nil
+	end
+	local column_index = math.floor((vim.fn.virtcol(".") - 1) / 36) + 1
+	local status = project_dashboard.columns[column_index]
+	return status and status.id and status or nil
+end
+
+local function add_dashboard_issue(initial_status)
+	local repositories = {}
+	local seen = {}
+	local current_repo = require("octo.utils").get_remote_name()
+	if current_repo then
+		seen[current_repo] = true
+		table.insert(repositories, current_repo)
+	end
+	for _, item in ipairs(project_dashboard.items) do
+		local repo = vim.tbl_get(item, "content", "repository", "nameWithOwner")
+		if repo and not seen[repo] then
+			seen[repo] = true
+			table.insert(repositories, repo)
+		end
+	end
+	table.sort(repositories)
+	table.insert(repositories, "Enter another repository…")
+
+	local function choose_status(repo)
+		if initial_status then
+			create_dashboard_issue_editor(repo, initial_status)
+			return
+		end
+		vim.ui.select(project_dashboard.project.columns.options, {
+			prompt = "Initial project status:",
+			format_item = function(status) return status.name end,
+		}, function(status)
+			if status then
+				create_dashboard_issue_editor(repo, status)
+			end
+		end)
+	end
+	vim.ui.select(repositories, { prompt = "Create issue in repository:" }, function(repo)
+		if not repo then
+			return
+		end
+		if repo == "Enter another repository…" then
+			vim.ui.input({ prompt = "Repository (owner/name): " }, function(value)
+				if value and value:match("^[^/]+/[^/]+$") then
+					choose_status(value)
+				elseif value then
+					vim.notify("Expected repository in owner/name form", vim.log.levels.WARN)
+				end
+			end)
+		else
+			choose_status(repo)
+		end
+	end)
+end
+
+local function open_project_dashboard_buffer(project, items)
+	vim.cmd("tabnew")
+	local bufnr = vim.api.nvim_get_current_buf()
+	project_dashboard.bufnr = bufnr
+	project_dashboard.project = project
+	project_dashboard.items = items
+	project_dashboard.filter = ""
+	vim.bo[bufnr].buftype = "nofile"
+	vim.bo[bufnr].bufhidden = "wipe"
+	vim.bo[bufnr].swapfile = false
+	vim.bo[bufnr].filetype = "octo_project"
+	vim.bo[bufnr].modifiable = false
+	vim.api.nvim_buf_set_name(bufnr, "octo-project://" .. project.owner.login .. "/" .. project.number)
+	vim.wo.wrap = false
+	vim.wo.cursorline = true
+	vim.wo.number = false
+	vim.wo.relativenumber = false
+
+	local function map(lhs, rhs, desc)
+		vim.keymap.set("n", lhs, rhs, { buffer = bufnr, silent = true, desc = desc })
+	end
+	map("<CR>", open_dashboard_item, "Open project item in Octo")
+	map("a", function()
+		add_dashboard_issue(dashboard_status_at_cursor())
+	end, "Add issue to GitHub project")
+	map("s", move_dashboard_item, "Move project item to another status")
+	map("r", refresh_project_dashboard, "Refresh GitHub project")
+	map("/", function()
+		vim.ui.input({ prompt = "Filter project items: ", default = project_dashboard.filter }, function(value)
+			if value ~= nil then
+				project_dashboard.filter = vim.trim(value)
+				render_project_dashboard()
+			end
+		end)
+	end, "Filter GitHub project")
+	map("gx", function()
+		local item = dashboard_item_at_cursor()
+		open_url(item and item.content and item.content.url or project.url)
+	end, "Open project item in browser")
+	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
+	render_project_dashboard()
+end
+
+local function open_project_dashboard()
+	local utils = require("octo.utils")
+	local repo = utils.get_remote_name()
+	if not repo then
+		vim.notify("Could not determine the current GitHub repository", vim.log.levels.ERROR)
+		return
+	end
+	local owner, name = utils.split_repo(repo)
+	local gh = require("octo.gh")
+	gh.api.graphql({
+		query = project_dashboard_query,
+		F = { owner = owner, name = name },
+		opts = { cb = gh.create_callback({
+			success = function(output)
+				local ok, response = pcall(vim.json.decode, output)
+				local projects, seen = {}, {}
+				local function add_sources(sources)
+					for _, source in ipairs(sources) do
+						for _, project in ipairs(source) do
+							if not seen[project.id] then
+								seen[project.id] = true
+								table.insert(projects, project)
+							end
+						end
+					end
+				end
+				local function choose_project()
+					projects = vim.tbl_filter(function(project)
+						return not project.closed and project.columns and project.columns.id
+					end, projects)
+					table.sort(projects, function(left, right)
+						if left.owner.login == right.owner.login then
+							return left.number > right.number
+						end
+						return left.owner.login:lower() < right.owner.login:lower()
+					end)
+					if #projects == 0 then
+						vim.notify("No open GitHub Projects v2 with a Status field were found", vim.log.levels.WARN)
+						return
+					end
+					vim.ui.select(projects, { prompt = "Open GitHub project:", format_item = function(project)
+						return string.format("%s/%d · %s", project.owner.login, project.number, project.title)
+					end }, function(project)
+						if project then
+							fetch_project_items(project, function(items)
+								open_project_dashboard_buffer(project, items)
+							end)
+						end
+					end)
+				end
+				if not ok then
+					choose_project()
+					return
+				end
+
+				add_sources({
+					vim.tbl_get(response, "data", "repository", "projects", "nodes") or {},
+					vim.tbl_get(response, "data", "viewer", "projects", "nodes") or {},
+				})
+				local pending = 0
+				for _, organization in ipairs(vim.tbl_get(response, "data", "viewer", "organizations", "nodes") or {}) do
+					local connection = organization.projects or {}
+					add_sources({ connection.nodes or {} })
+					if connection.pageInfo and connection.pageInfo.hasNextPage then
+						pending = pending + 1
+						fetch_organization_project_pages(organization.login, connection.pageInfo.endCursor, {}, function(more)
+							add_sources({ more })
+							pending = pending - 1
+							if pending == 0 then
+								choose_project()
+							end
+						end)
+					end
+				end
+				if pending == 0 then
+					choose_project()
+				end
+			end,
+			failure = function(stderr)
+				vim.notify("Could not list GitHub projects. Run: gh auth refresh -s read:project\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
+			end,
+		}) },
+	})
+end
+
 function M.setup()
 	setup_highlights()
 
@@ -3016,6 +3714,7 @@ function M.setup()
 	vim.keymap.set("n", "<leader>Hc", octo("pr checkout"), { desc = "Octo checkout PR", silent = true })
 	vim.keymap.set("n", "<leader>Hd", octo("pr diffview"), { desc = "Octo PR diff in Diffview", silent = true })
 	vim.keymap.set("n", "<leader>Hn", octo("notification list"), { desc = "Octo list notifications", silent = true })
+	vim.keymap.set("n", "<leader>Hb", open_project_dashboard, { desc = "GitHub project dashboard", silent = true })
 	vim.keymap.set("n", "<leader>Hr", octo("review start"), { desc = "Octo start review", silent = true })
 	vim.keymap.set("n", "<leader>HR", octo("review resume"), { desc = "Octo resume review", silent = true })
 	vim.keymap.set("n", "<leader>Hq", octo("review close"), { desc = "Octo close review", silent = true })
@@ -3024,6 +3723,9 @@ function M.setup()
 	end, { desc = "Octo search current repo", silent = true })
 	vim.api.nvim_create_user_command("Myprs", open_my_prs, { desc = "Octo list open PRs authored by me" })
 	vim.api.nvim_create_user_command("Allprs", open_all_prs, { desc = "Octo list open PRs involving me" })
+	vim.api.nvim_create_user_command("OctoProjectDashboard", open_project_dashboard, {
+		desc = "Open a GitHub Projects v2 dashboard",
+	})
 	vim.api.nvim_create_user_command("GitHubNotificationsStart", start_github_notification_polling, {
 		desc = "Start polling unread GitHub notifications",
 	})
