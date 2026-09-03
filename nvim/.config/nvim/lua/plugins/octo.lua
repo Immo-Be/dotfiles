@@ -2959,6 +2959,7 @@ local project_dashboard = {
 	loading = false,
 	active_column = nil,
 	focus_item_id = nil,
+	repositories = {},
 }
 
 local project_dashboard_ns = vim.api.nvim_create_namespace("OctoProjectDashboard")
@@ -3280,6 +3281,48 @@ local function fetch_project_items(project, done, cursor, accumulated)
 				vim.notify("Could not load GitHub project. Ensure gh has the read:project scope.\n" .. vim.trim(stderr or ""), vim.log.levels.ERROR)
 				done(accumulated or {})
 			end,
+		}) },
+	})
+end
+
+local project_repositories_query = [[
+query($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on ProjectV2 {
+      repositories(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { nameWithOwner }
+      }
+    }
+  }
+}
+]]
+
+local function fetch_project_repositories(project, done, cursor, accumulated)
+	local gh = require("octo.gh")
+	local fields = { query = project_repositories_query, id = project.id }
+	if cursor then fields.after = cursor end
+	gh.api.graphql({
+		f = fields,
+		opts = { cb = gh.create_callback({
+			success = function(output)
+				local ok, response = pcall(vim.json.decode, output)
+				local repositories = ok and vim.tbl_get(response, "data", "node", "repositories") or nil
+				accumulated = accumulated or {}
+				if not repositories then
+					done(accumulated)
+					return
+				end
+				for _, repository in ipairs(repositories.nodes or {}) do
+					table.insert(accumulated, repository.nameWithOwner)
+				end
+				if repositories.pageInfo.hasNextPage then
+					fetch_project_repositories(project, done, repositories.pageInfo.endCursor, accumulated)
+				else
+					done(accumulated)
+				end
+			end,
+			failure = function() done(accumulated or {}) end,
 		}) },
 	})
 end
@@ -3629,8 +3672,12 @@ end
 local function add_dashboard_issue(initial_status)
 	local repositories = {}
 	local seen = {}
+	for _, repo in ipairs(project_dashboard.repositories) do
+		seen[repo] = true
+		table.insert(repositories, repo)
+	end
 	local current_repo = require("octo.utils").get_remote_name()
-	if current_repo then
+	if current_repo and not seen[current_repo] then
 		seen[current_repo] = true
 		table.insert(repositories, current_repo)
 	end
@@ -3676,7 +3723,7 @@ local function add_dashboard_issue(initial_status)
 	end)
 end
 
-local function open_project_dashboard_buffer(project, items)
+local function open_project_dashboard_buffer(project, items, repositories)
 	vim.cmd("tabnew")
 	local bufnr = vim.api.nvim_get_current_buf()
 	project_dashboard.bufnr = bufnr
@@ -3686,6 +3733,7 @@ local function open_project_dashboard_buffer(project, items)
 	project_dashboard.loading = false
 	project_dashboard.active_column = 1
 	project_dashboard.focus_item_id = nil
+	project_dashboard.repositories = repositories or {}
 	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].bufhidden = "wipe"
 	vim.bo[bufnr].swapfile = false
@@ -3775,7 +3823,9 @@ local function open_project_dashboard()
 						if project then
 							vim.notify("Loading " .. project.title .. "…", vim.log.levels.INFO)
 							fetch_project_items(project, function(items)
-								open_project_dashboard_buffer(project, items)
+								fetch_project_repositories(project, function(repositories)
+									open_project_dashboard_buffer(project, items, repositories)
+								end)
 							end)
 						end
 					end)
