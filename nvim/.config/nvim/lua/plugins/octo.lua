@@ -6,6 +6,9 @@ local notification_baseline_ready = false
 local notification_versions = {}
 local notification_last_error
 local notification_scope_key
+local notification_since
+local notification_failures = 0
+local notification_retry_after = 0
 local active_board_items = {}
 local board_snapshots = {}
 local poll_active_project_board
@@ -41,6 +44,9 @@ local function decode_notification_pages(data)
 	if not ok or type(pages) ~= "table" then
 		return nil
 	end
+	if pages[1] and pages[1].id then
+		return pages
+	end
 	local notifications = {}
 	for _, page in ipairs(pages) do
 		if vim.islist(page) then
@@ -74,16 +80,34 @@ local function poll_github_notifications(notify_when_unchanged)
 	if notification_poll_running then
 		return
 	end
+	if os.time() < notification_retry_after then
+		if notify_when_unchanged then
+			vim.notify("GitHub notification polling is backing off after an API failure", vim.log.levels.WARN)
+		end
+		return
+	end
+	local scope_key = active_repo_name()
+	if notification_scope_key ~= scope_key then
+		notification_scope_key = scope_key
+		notification_versions = {}
+		notification_baseline_ready = false
+		notification_since = nil
+	end
 	notification_poll_running = true
 	local gh = require("octo.gh")
+	local requested_at = os.date("!%Y-%m-%dT%H:%M:%SZ")
+	local endpoint = "notifications?per_page=100"
+	if notification_since then
+		endpoint = endpoint .. "&since=" .. notification_since
+	end
 	gh.api.get({
-		"notifications?per_page=100",
-		paginate = true,
-		slurp = true,
+		endpoint,
 		opts = {
 			cb = function(output, stderr)
 				notification_poll_running = false
 				if stderr and not vim.trim(stderr):match("^$") then
+					notification_failures = notification_failures + 1
+					notification_retry_after = os.time() + math.min(3600, 60 * (2 ^ (notification_failures - 1)))
 					if stderr ~= notification_last_error then
 						notification_last_error = stderr
 						vim.notify("GitHub notification polling failed: " .. vim.trim(stderr), vim.log.levels.WARN)
@@ -95,17 +119,14 @@ local function poll_github_notifications(notify_when_unchanged)
 				if not notifications then
 					return
 				end
+				notification_since = requested_at
 				notifications = vim.tbl_filter(function(notification)
 					local key = notification_item_key(notification)
 					return key and active_board_items[key] == true
 				end, notifications)
 				notification_last_error = nil
-				local scope_key = active_repo_name()
-				if notification_scope_key ~= scope_key then
-					notification_scope_key = scope_key
-					notification_versions = {}
-					notification_baseline_ready = false
-				end
+				notification_failures = 0
+				notification_retry_after = 0
 				local changed = {}
 				local current_versions = {}
 				for _, notification in ipairs(notifications) do
@@ -147,7 +168,7 @@ local function start_github_notification_polling()
 		vim.notify("Could not create GitHub notification timer", vim.log.levels.ERROR)
 		return
 	end
-	notification_timer:start(0, 60000, vim.schedule_wrap(function()
+	notification_timer:start(0, 900000, vim.schedule_wrap(function()
 		if poll_active_project_board then
 			poll_active_project_board(false, function() poll_github_notifications(false) end)
 		else
@@ -4389,6 +4410,102 @@ local function setup_immediate_issue_reference_previews()
 	})
 end
 
+local function delete_current_octo_issue()
+	local buffer = require("octo.utils").get_current_buffer()
+	if not buffer or not buffer:isIssue() then
+		vim.notify("Issue deletion is only available inside an Octo issue buffer", vim.log.levels.WARN)
+		return
+	end
+	local issue = buffer:issue()
+	local confirmation = "#" .. issue.number
+	vim.ui.input({
+		prompt = string.format("Permanently delete %s#%d? Type %s: ", buffer.repo, issue.number, confirmation),
+	}, function(value)
+		if value ~= confirmation then
+			if value ~= nil then vim.notify("Issue deletion cancelled", vim.log.levels.INFO) end
+			return
+		end
+		local query = [[
+mutation($id: ID!) {
+  deleteIssue(input: {issueId: $id}) { repository { id } }
+}
+]]
+		local bufnr = buffer.bufnr
+		local winid = vim.api.nvim_get_current_win()
+		local gh = require("octo.gh")
+		gh.api.graphql({
+			f = { query = query, id = issue.id },
+			opts = { cb = gh.create_callback({
+				success = function()
+					project_dashboard.items = vim.tbl_filter(function(item)
+						return not item.content or item.content.id ~= issue.id
+					end, project_dashboard.items)
+					if project_dashboard.bufnr and vim.api.nvim_buf_is_valid(project_dashboard.bufnr) then
+						render_project_dashboard()
+					end
+					vim.notify(string.format("Permanently deleted %s#%d", buffer.repo, issue.number), vim.log.levels.INFO)
+					if vim.api.nvim_win_is_valid(winid) then
+						local config = vim.api.nvim_win_get_config(winid)
+						if config.relative ~= "" then
+							vim.api.nvim_win_close(winid, true)
+						elseif vim.api.nvim_buf_is_valid(bufnr) then
+							vim.api.nvim_buf_delete(bufnr, { force = true })
+						end
+					end
+				end,
+				failure = function(stderr)
+					vim.notify("Could not delete issue. GitHub requires repository admin permission and may require organization issue deletion to be enabled.\n"
+						.. vim.trim(stderr or ""), vim.log.levels.ERROR)
+				end,
+			}) },
+		})
+	end)
+end
+
+local function setup_issue_options_delete()
+	local mappings = require("octo.mappings")
+	if mappings.issue_options_with_delete then
+		return
+	end
+
+	local original_issue_options = mappings.issue_options
+	mappings.issue_options_with_delete = true
+
+	mappings.issue_options = function()
+		local original_select = vim.ui.select
+
+		vim.ui.select = function(items, opts, on_choice)
+			if opts and opts.prompt == "Select an option:"
+				and vim.tbl_contains(items, "Develop Issue")
+				and not vim.tbl_contains(items, "Start Review")
+			then
+				local delete_option = "Delete Issue"
+				local choices = vim.deepcopy(items)
+				if not vim.tbl_contains(choices, delete_option) then
+					table.insert(choices, delete_option)
+				end
+
+				return original_select(choices, opts, function(choice, idx)
+					if choice == delete_option then
+						delete_current_octo_issue()
+						return
+					end
+					on_choice(choice, idx)
+				end)
+			end
+
+			return original_select(items, opts, on_choice)
+		end
+
+		local ok, err = pcall(original_issue_options)
+		vim.ui.select = original_select
+
+		if not ok then
+			error(err)
+		end
+	end
+end
+
 function M.setup()
 	setup_highlights()
 
@@ -4398,6 +4515,9 @@ function M.setup()
 		default_to_projects_v2 = true,
 		users = "assignable",
 		commands = {
+			issue = {
+				delete = delete_current_octo_issue,
+			},
 			pr = {
 				diffview = open_pr_diffview,
 			},
@@ -4436,8 +4556,8 @@ function M.setup()
 		},
 
 		poll = {
-			enabled = true,
-			interval = 10000,
+			enabled = false,
+			interval = 300000,
 			notify_on_refresh = true,
 			notify_on_change = true,
 		},
@@ -4445,6 +4565,7 @@ function M.setup()
 	setup_issue_completion_metadata()
 	setup_diffview_comment_mapping()
 	setup_pr_options_diffview()
+	setup_issue_options_delete()
 	setup_prompt_delete_branch_after_merge()
 	setup_compact_octo_details()
 	setup_cmp_completion()
@@ -4520,8 +4641,6 @@ function M.setup()
 			stop_github_notification_polling(false)
 		end,
 	})
-	start_github_notification_polling()
-
 	vim.api.nvim_create_autocmd("FileType", {
 		group = vim.api.nvim_create_augroup("OctoOpenUrl", { clear = true }),
 		pattern = "octo",
