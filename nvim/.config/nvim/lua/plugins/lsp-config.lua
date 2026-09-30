@@ -126,6 +126,15 @@ function M.setup()
 					{ title = "LSP Definitions", items = vim.lsp.util.locations_to_items(result, position_encoding) }
 				)
 				vim.cmd("copen")
+				vim.keymap.set("n", "<CR>", function()
+					local index = vim.fn.line(".")
+					vim.cmd("cclose")
+					vim.cmd(index .. "cc")
+				end, {
+					buffer = vim.api.nvim_get_current_buf(),
+					silent = true,
+					desc = "Open definition and close quickfix",
+				})
 			else
 				local location = vim.islist(result) and result[1] or result
 				vim.lsp.util.jump_to_location(location, position_encoding)
