@@ -1,17 +1,5 @@
 local M = {}
 
-local notification_timer
-local notification_poll_running = false
-local notification_baseline_ready = false
-local notification_versions = {}
-local notification_last_error
-local notification_scope_key
-local notification_since
-local notification_failures = 0
-local notification_retry_after = 0
-local active_board_items = {}
-local board_snapshots = {}
-local poll_active_project_board
 local project_defaults_path = vim.fn.stdpath("data") .. "/octo-project-defaults.json"
 
 local function load_project_defaults()
@@ -30,162 +18,6 @@ end
 local function active_repo_name()
 	local ok, repo = pcall(require("octo.utils").get_remote_name)
 	return ok and repo or nil
-end
-
-local function notification_item_key(notification)
-	local repo = vim.tbl_get(notification, "repository", "full_name")
-	local number = vim.tbl_get(notification, "subject", "url")
-		and vim.tbl_get(notification, "subject", "url"):match("/(%d+)$")
-	return repo and number and repo:lower() .. "#" .. number or nil
-end
-
-local function decode_notification_pages(data)
-	local ok, pages = pcall(vim.json.decode, data)
-	if not ok or type(pages) ~= "table" then
-		return nil
-	end
-	if pages[1] and pages[1].id then
-		return pages
-	end
-	local notifications = {}
-	for _, page in ipairs(pages) do
-		if vim.islist(page) then
-			vim.list_extend(notifications, page)
-		end
-	end
-	return notifications
-end
-
-local function notification_message(notification)
-	local repo = vim.tbl_get(notification, "repository", "full_name") or "GitHub"
-	local subject = notification.subject or {}
-	local reason_labels = {
-		assign = "assigned",
-		author = "activity",
-		comment = "new comment",
-		invitation = "invitation",
-		manual = "subscribed",
-		mention = "mentioned",
-		review_requested = "review requested",
-		security_alert = "security alert",
-		state_change = "state changed",
-		subscribed = "new activity",
-		team_mention = "team mentioned",
-	}
-	local reason = reason_labels[notification.reason] or notification.reason or "updated"
-	return string.format("%s · %s\n%s · %s", repo, subject.title or "Untitled", subject.type or "Notification", reason)
-end
-
-local function poll_github_notifications(notify_when_unchanged)
-	if notification_poll_running then
-		return
-	end
-	if os.time() < notification_retry_after then
-		if notify_when_unchanged then
-			vim.notify("GitHub notification polling is backing off after an API failure", vim.log.levels.WARN)
-		end
-		return
-	end
-	local scope_key = active_repo_name()
-	if notification_scope_key ~= scope_key then
-		notification_scope_key = scope_key
-		notification_versions = {}
-		notification_baseline_ready = false
-		notification_since = nil
-	end
-	notification_poll_running = true
-	local gh = require("octo.gh")
-	local requested_at = os.date("!%Y-%m-%dT%H:%M:%SZ")
-	local endpoint = "notifications?per_page=100"
-	if notification_since then
-		endpoint = endpoint .. "&since=" .. notification_since
-	end
-	gh.api.get({
-		endpoint,
-		opts = {
-			cb = function(output, stderr)
-				notification_poll_running = false
-				if stderr and not vim.trim(stderr):match("^$") then
-					notification_failures = notification_failures + 1
-					notification_retry_after = os.time() + math.min(3600, 60 * (2 ^ (notification_failures - 1)))
-					if stderr ~= notification_last_error then
-						notification_last_error = stderr
-						vim.notify("GitHub notification polling failed: " .. vim.trim(stderr), vim.log.levels.WARN)
-					end
-					return
-				end
-
-				local notifications = decode_notification_pages(output or "")
-				if not notifications then
-					return
-				end
-				notification_since = requested_at
-				notifications = vim.tbl_filter(function(notification)
-					local key = notification_item_key(notification)
-					return key and active_board_items[key] == true
-				end, notifications)
-				notification_last_error = nil
-				notification_failures = 0
-				notification_retry_after = 0
-				local changed = {}
-				local current_versions = {}
-				for _, notification in ipairs(notifications) do
-					local id = tostring(notification.id)
-					local version = notification.updated_at or ""
-					current_versions[id] = version
-					if notification_baseline_ready and notification_versions[id] ~= version then
-						table.insert(changed, notification)
-					end
-				end
-				notification_versions = current_versions
-
-				if not notification_baseline_ready then
-					notification_baseline_ready = true
-					if notify_when_unchanged then
-						vim.notify(string.format("Watching %d unread GitHub notifications", #notifications), vim.log.levels.INFO)
-					end
-					return
-				end
-
-				for _, notification in ipairs(changed) do
-					vim.notify(notification_message(notification), vim.log.levels.INFO, { title = "GitHub notification" })
-				end
-				if notify_when_unchanged and #changed == 0 then
-					vim.notify("No new GitHub notifications", vim.log.levels.INFO)
-				end
-			end,
-		},
-	})
-end
-
-local function start_github_notification_polling()
-	if notification_timer then
-		vim.notify("GitHub notification polling is already running", vim.log.levels.INFO)
-		return
-	end
-	notification_timer = vim.uv.new_timer()
-	if not notification_timer then
-		vim.notify("Could not create GitHub notification timer", vim.log.levels.ERROR)
-		return
-	end
-	notification_timer:start(0, 900000, vim.schedule_wrap(function()
-		if poll_active_project_board then
-			poll_active_project_board(false, function() poll_github_notifications(false) end)
-		else
-			poll_github_notifications(false)
-		end
-	end))
-end
-
-local function stop_github_notification_polling(notify)
-	if notification_timer then
-		notification_timer:stop()
-		notification_timer:close()
-		notification_timer = nil
-	end
-	if notify then
-		vim.notify("GitHub notification polling stopped", vim.log.levels.INFO)
-	end
 end
 
 local function octo(command)
@@ -3590,66 +3422,6 @@ local function fetch_project_items(project, done, cursor, accumulated)
 	})
 end
 
-poll_active_project_board = function(notify_when_unchanged, done)
-	done = done or function() end
-	local repo = active_repo_name()
-	local project = repo and project_defaults[repo] or nil
-	if not project then
-		active_board_items = {}
-		if notify_when_unchanged then
-			vim.notify("No default GitHub project configured for " .. (repo or "this directory"), vim.log.levels.INFO)
-		end
-		done()
-		return
-	end
-	fetch_project_items(project, function(items, failed)
-		if failed then
-			done()
-			return
-		end
-		local scope = repo .. "|" .. project.id
-		local previous = board_snapshots[scope]
-		local current = {}
-		local membership = {}
-		local changes = {}
-		for _, item in ipairs(items) do
-			local content = item.content
-			local item_repo = content and vim.tbl_get(content, "repository", "nameWithOwner")
-			if content and item_repo and content.number then
-				local key = item_repo:lower() .. "#" .. content.number
-				local status = project_item_status(item, project.columns.id)
-				current[key] = {
-					title = content.title or "Untitled",
-					status = status,
-					version = content.updatedAt or "",
-				}
-				membership[key] = true
-				if previous and not previous[key] then
-					table.insert(changes, string.format("Added %s · %s", key, current[key].title))
-				elseif previous and (previous[key].status ~= status or previous[key].version ~= current[key].version) then
-					local detail = previous[key].status ~= status
-						and string.format("%s → %s", previous[key].status, status) or "issue updated"
-					table.insert(changes, string.format("%s · %s · %s", key, current[key].title, detail))
-				end
-			end
-		end
-		if previous then
-			for key, old in pairs(previous) do
-				if not current[key] then table.insert(changes, string.format("Removed %s · %s", key, old.title)) end
-			end
-		end
-		board_snapshots[scope] = current
-		active_board_items = membership
-		for _, message in ipairs(changes) do
-			vim.notify(message, vim.log.levels.INFO, { title = project.title })
-		end
-		if notify_when_unchanged and #changes == 0 then
-			vim.notify("No new activity in " .. project.title, vim.log.levels.INFO)
-		end
-		done()
-	end)
-end
-
 local project_repositories_query = [[
 query($id: ID!, $after: String) {
   node(id: $id) {
@@ -4227,8 +3999,6 @@ local function open_project_dashboard_buffer(project, items, repositories)
 			owner = { login = project.owner.login }, columns = vim.deepcopy(project.columns),
 		}
 		save_project_defaults()
-		board_snapshots[repo .. "|" .. project.id] = nil
-		notification_scope_key = nil
 		vim.notify(string.format("%s is now the default project for %s", project.title, repo), vim.log.levels.INFO)
 	end, "Set default GitHub project")
 	map("q", "<cmd>tabclose<CR>", "Close GitHub project")
@@ -4266,8 +4036,6 @@ local function set_current_project_as_default()
 		owner = { login = project.owner.login }, columns = vim.deepcopy(project.columns),
 	}
 	save_project_defaults()
-	board_snapshots[repo .. "|" .. project.id] = nil
-	notification_scope_key = nil
 	vim.notify(string.format("%s is now the default project for %s", project.title, repo), vim.log.levels.INFO)
 end
 
@@ -4602,7 +4370,6 @@ function M.setup()
 		end
 		project_defaults[repo] = nil
 		save_project_defaults()
-		active_board_items = {}
 		vim.notify("Cleared the default GitHub project for " .. repo, vim.log.levels.INFO)
 	end, { desc = "Clear this repository's default GitHub project" })
 	vim.api.nvim_create_user_command("OctoProjectDefaultShow", function()
@@ -4611,36 +4378,6 @@ function M.setup()
 		vim.notify(project and string.format("%s → %s/%d · %s", repo, project.owner.login, project.number, project.title)
 			or "No default GitHub project is configured for " .. (repo or "this directory"), vim.log.levels.INFO)
 	end, { desc = "Show this repository's default GitHub project" })
-	vim.api.nvim_create_user_command("GitHubNotificationsStart", start_github_notification_polling, {
-		desc = "Start polling unread GitHub notifications",
-	})
-	vim.api.nvim_create_user_command("GitHubNotificationsStop", function()
-		stop_github_notification_polling(true)
-	end, { desc = "Stop polling GitHub notifications" })
-	vim.api.nvim_create_user_command("GitHubNotificationsPoll", function()
-		poll_active_project_board(true, function() poll_github_notifications(false) end)
-	end, { desc = "Check GitHub notifications now" })
-	vim.api.nvim_create_user_command("GitHubNotificationsStatus", function()
-		vim.notify(
-			string.format(
-				"GitHub notification polling: %s · baseline: %s · unread threads: %d",
-				notification_timer and "running" or "stopped",
-				notification_baseline_ready and "ready" or "loading",
-				vim.tbl_count(notification_versions)
-			),
-			vim.log.levels.INFO
-		)
-	end, { desc = "Show GitHub notification polling status" })
-	vim.keymap.set("n", "<leader>HN", function()
-		poll_github_notifications(true)
-	end, { desc = "Poll GitHub notifications", silent = true })
-
-	vim.api.nvim_create_autocmd("VimLeavePre", {
-		group = vim.api.nvim_create_augroup("GitHubNotificationPolling", { clear = true }),
-		callback = function()
-			stop_github_notification_polling(false)
-		end,
-	})
 	vim.api.nvim_create_autocmd("FileType", {
 		group = vim.api.nvim_create_augroup("OctoOpenUrl", { clear = true }),
 		pattern = "octo",
