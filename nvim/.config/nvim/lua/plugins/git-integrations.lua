@@ -42,15 +42,6 @@ function M.setup()
 		commit_popup = { kind = "split" },
 	})
 
-	vim.api.nvim_create_user_command("AICommit", function()
-		require("utils.git").generate_ai_commit_message(function(message)
-			vim.cmd("Neogit commit")
-			vim.defer_fn(function()
-				vim.api.nvim_put({ message }, "l", true, true)
-			end, 200)
-		end)
-	end, { desc = "Generate AI commit message with Avante" })
-
 	require("gitsigns").setup({
 		current_line_blame = true,
 		on_attach = function(bufnr)

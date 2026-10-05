@@ -25,13 +25,6 @@ local function run_shell(command, cwd)
 end
 
 local build_hooks = {
-	["avante.nvim"] = {
-		{
-			shell = vim.fn.has("win32") == 1
-					and "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false"
-				or "make",
-		},
-	},
 	["fzf"] = {
 		{
 			load = true,
@@ -112,8 +105,6 @@ local pack_specs = {
 	gh("nvimtools/none-ls-extras.nvim"),
 	gh("stevearc/conform.nvim"),
 	gh("mfussenegger/nvim-lint"),
-	gh("yetone/avante.nvim"),
-	gh("zbirenbaum/copilot.lua"),
 	gh("echasnovski/mini.pick"),
 	gh("ibhagwan/fzf-lua"),
 	gh("stevearc/dressing.nvim"),
@@ -158,7 +149,7 @@ local setup_modules = {
 	"plugins.none-ls",
 	"plugins.conform",
 	"plugins.nvim-lint",
-	"plugins.copilot",
+	"plugins.markdown-ui",
 	"plugins.git-integrations",
 	"plugins.octo-lazy",
 	"plugins.opencode",

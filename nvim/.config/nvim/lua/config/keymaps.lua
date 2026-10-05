@@ -71,9 +71,6 @@ vim.keymap.set("n", "<M-Tab>", ":b#<CR>", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-d>", "<C-d>zz", { noremap = true, silent = true })
 vim.keymap.set("n", "<C-u>", "<C-u>zz", { noremap = true, silent = true })
 
--- Recommend for avante.nvim: views can only be fully collapsed with the global statusline
-vim.opt.laststatus = 3
-
 -- Enhanced diagnostic navigation with centering and auto-float
 vim.keymap.set("n", "]e", function()
 	vim.diagnostic.goto_next()
@@ -250,10 +247,6 @@ vim.keymap.set("n", "<leader>hm", function()
 		end
 	end)
 end, { desc = "Git commit with message (staged changes)" })
-
-vim.keymap.set("n", "<leader>ha", function()
-	require("utils.git").commit_with_ai()
-end, { desc = "Git commit with AI-generated message" })
 
 vim.keymap.set("n", "<leader>hP", function()
 	require("utils.git").push_with_confirmation()
