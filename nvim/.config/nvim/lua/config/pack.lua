@@ -124,7 +124,6 @@ local pack_specs = {
 	gh("sindrets/diffview.nvim"),
 	gh("NeogitOrg/neogit"),
 	gh("lewis6991/gitsigns.nvim"),
-	gh("pwntester/octo.nvim"),
 	gh("mbbill/undotree"),
 	gh("NickvanDyke/opencode.nvim"),
 	gh("ThePrimeagen/99"),
@@ -161,7 +160,7 @@ local setup_modules = {
 	"plugins.nvim-lint",
 	"plugins.copilot",
 	"plugins.git-integrations",
-	"plugins.octo",
+	"plugins.octo-lazy",
 	"plugins.opencode",
 	"plugins.99",
 	"plugins.obsidian",
@@ -190,6 +189,7 @@ vim.api.nvim_create_user_command("PackUpdateLockfile", function()
 end, { desc = "Sync plugins to nvim-pack-lock.json" })
 
 vim.pack.add(pack_specs, { confirm = false, load = true })
+vim.pack.add({ gh("pwntester/octo.nvim") }, { confirm = false, load = false })
 
 for _, module_name in ipairs(setup_modules) do
 	local module = require(module_name)
