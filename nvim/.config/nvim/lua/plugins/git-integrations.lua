@@ -1,10 +1,17 @@
 local M = {}
 
 function M.setup()
+	local diffview_actions = require("diffview.actions")
+
 	require("git-conflict").setup()
 
 	require("diffview").setup({
 		enhanced_diff_hl = true,
+		keymaps = {
+			file_history_panel = {
+				{ "n", "D", diffview_actions.open_in_diffview, { desc = "Open the full commit diff" } },
+			},
+		},
 		view = {
 			merge_tool = {
 				layout = "diff1_plain",
@@ -12,21 +19,10 @@ function M.setup()
 		},
 	})
 
-	vim.keymap.set("n", "<leader>dh", ":DiffviewFileHistory %<CR>", { desc = "File History (current file)" })
 	vim.keymap.set("n", "<leader>dv", "<cmd>DiffviewOpen origin/develop..HEAD<CR>", {
 		desc = "Diff against origin/develop",
 		silent = true,
 	})
-	vim.keymap.set("v", "<leader>dh", function()
-		local start_line = vim.fn.line("'<")
-		local end_line = vim.fn.line("'>")
-		if start_line > 0 and end_line > 0 then
-			vim.cmd(string.format("%d,%dDiffviewFileHistory", start_line, end_line))
-		else
-			vim.notify("Visual selection required", vim.log.levels.ERROR)
-		end
-	end, { desc = "File History (selection)" })
-
 	vim.api.nvim_create_autocmd("FileType", {
 		pattern = "DiffviewFilePanel",
 		callback = function()
