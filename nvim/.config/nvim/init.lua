@@ -1,4 +1,5 @@
 require("config.options")
+require("config.bigfile").setup()
 require("config.compat")
 require("config.keymaps")
 require("config.diagnostics")

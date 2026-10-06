@@ -41,6 +41,10 @@ function M.setup()
 	require("gitsigns").setup({
 		current_line_blame = true,
 		on_attach = function(bufnr)
+			if require("config.bigfile").is_large(bufnr) then
+				return false
+			end
+
 			local gitsigns = require("gitsigns")
 
 			local function map(mode, l, r, opts)

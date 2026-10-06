@@ -49,6 +49,9 @@ function M.setup()
 	end
 
 	cmp.setup({
+		enabled = function()
+			return not require("config.bigfile").is_large(0)
+		end,
 		snippet = {
 			expand = function(args)
 				require("luasnip").lsp_expand(args.body)

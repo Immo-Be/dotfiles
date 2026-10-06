@@ -31,6 +31,13 @@ local opts = {
 function M.setup()
 	local ibl = require("ibl")
 	ibl.setup(opts)
+	vim.api.nvim_create_autocmd("FileType", {
+		callback = function(args)
+			if require("config.bigfile").is_large(args.buf) then
+				ibl.setup_buffer(args.buf, { enabled = false })
+			end
+		end,
+	})
 
 	vim.api.nvim_create_user_command("IndentGuidesToggle", function()
 		vim.cmd("IBLToggle")

@@ -32,6 +32,10 @@ function M.setup()
 			"TelescopePrompt",
 		},
 		should_enable = function(bufnr)
+			if require("config.bigfile").is_large(bufnr) then
+				return false
+			end
+
 			local name = vim.api.nvim_buf_get_name(bufnr)
 			if name == "" then
 				return true

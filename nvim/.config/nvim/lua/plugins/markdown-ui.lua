@@ -29,6 +29,9 @@ function M.setup()
 	require("render-markdown").setup({
 		file_types = { "markdown" },
 		ignore = function(bufnr)
+			if require("config.bigfile").is_large(bufnr) then
+				return true
+			end
 			return is_vault_buffer(bufnr) and vim.bo[bufnr].filetype == "markdown"
 		end,
 	})

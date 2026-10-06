@@ -35,6 +35,9 @@ function M.setup()
 	})
 
 	null_ls.setup({
+		should_attach = function(bufnr)
+			return not require("config.bigfile").is_large(bufnr)
+		end,
 		sources = {
 			-- Lua formatting
 			null_ls.builtins.formatting.stylua,

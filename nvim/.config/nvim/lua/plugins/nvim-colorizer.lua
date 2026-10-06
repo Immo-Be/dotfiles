@@ -1,11 +1,7 @@
 local M = {}
 
 function M.setup()
-	require("colorizer").setup({
-		-- Filetypes to enable colorizer for
-		-- Use "*" for all files, or specify individual filetypes
-		"*", -- Enable for all filetypes
-	}, {
+	require("colorizer").setup({}, {
 		-- Color format options
 		RGB = true, -- #RGB hex codes (3 digits)
 		RRGGBB = true, -- #RRGGBB hex codes (6 digits)
@@ -24,8 +20,10 @@ function M.setup()
 
 	vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
 		pattern = { "*.css", "*.scss", "*.sass", "*.less", "*.html", "*.jsx", "*.tsx", "*.js", "*.ts" },
-		callback = function()
-			require("colorizer").attach_to_buffer(0)
+		callback = function(args)
+			if not require("config.bigfile").is_large(args.buf) then
+				require("colorizer").attach_to_buffer(args.buf)
+			end
 		end,
 	})
 end

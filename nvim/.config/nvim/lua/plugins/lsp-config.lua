@@ -1,6 +1,8 @@
 local M = {}
 
 function M.setup()
+	local bigfile = require("config.bigfile")
+
 	require("mason").setup()
 	require("mason-lspconfig").setup({
 		ensure_installed = {
@@ -17,6 +19,41 @@ function M.setup()
 
 	local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
+	local function configure_and_enable(name, config)
+		vim.lsp.config(name, config)
+
+		-- vim.lsp.enable() resolves roots asynchronously. Guard that step so a
+		-- large buffer is never serialized and sent in textDocument/didOpen.
+		local resolved = vim.lsp.config[name]
+		local original_root_dir = resolved.root_dir
+		local root_markers = resolved.root_markers
+		local workspace_required = resolved.workspace_required
+
+		vim.lsp.config(name, {
+			root_dir = function(bufnr, on_dir)
+				if bigfile.is_large(bufnr) then
+					return
+				end
+
+				if type(original_root_dir) == "function" then
+					original_root_dir(bufnr, on_dir)
+					return
+				end
+
+				local root_dir = original_root_dir
+				if not root_dir and root_markers then
+					root_dir = vim.fs.root(bufnr, root_markers)
+				end
+
+				if root_dir or not workspace_required then
+					on_dir(root_dir)
+				end
+			end,
+		})
+
+		vim.lsp.enable(name)
+	end
+
 	local function on_attach(client, bufnr)
 		local ts_names = { tsserver = true, ts_ls = true, vtsls = true }
 		if ts_names[client.name] then
@@ -25,21 +62,19 @@ function M.setup()
 		end
 	end
 
-	vim.lsp.config("astro", {
+	configure_and_enable("astro", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 		filetypes = { "astro" },
 	})
-	vim.lsp.enable("astro")
 
-	vim.lsp.config("bashls", {
+	configure_and_enable("bashls", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 		filetypes = { "sh", "bash", "zsh" },
 	})
-	vim.lsp.enable("bashls")
 
-	vim.lsp.config("vtsls", {
+	configure_and_enable("vtsls", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 		filetypes = {
@@ -77,9 +112,8 @@ function M.setup()
 			},
 		},
 	})
-	vim.lsp.enable("vtsls")
 
-	vim.lsp.config("lua_ls", {
+	configure_and_enable("lua_ls", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 		settings = {
@@ -88,25 +122,21 @@ function M.setup()
 			},
 		},
 	})
-	vim.lsp.enable("lua_ls")
 
-	vim.lsp.config("html", {
+	configure_and_enable("html", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 	})
-	vim.lsp.enable("html")
 
-	vim.lsp.config("cssls", {
+	configure_and_enable("cssls", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 	})
-	vim.lsp.enable("cssls")
 
-	vim.lsp.config("jsonls", {
+	configure_and_enable("jsonls", {
 		capabilities = capabilities,
 		on_attach = on_attach,
 	})
-	vim.lsp.enable("jsonls")
 
 	local function smart_definition()
 		local params = vim.lsp.util.make_position_params()

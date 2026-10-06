@@ -56,6 +56,9 @@ local function enable_treesitter(bufnr)
 	if not vim.api.nvim_buf_is_valid(bufnr) or not vim.bo[bufnr].buflisted then
 		return
 	end
+	if require("config.bigfile").is_large(bufnr) then
+		return
+	end
 
 	local filetype = vim.bo[bufnr].filetype
 	if filetype == "" then
@@ -198,6 +201,9 @@ function M.setup()
 		multiline_threshold = 20,
 		trim_scope = "outer",
 		mode = "cursor",
+		on_attach = function(bufnr)
+			return not require("config.bigfile").is_large(bufnr)
+		end,
 	})
 
 	vim.keymap.set("n", "[f", function()
@@ -206,6 +212,9 @@ function M.setup()
 
 	local rainbow_delimiters = require("rainbow-delimiters")
 	require("rainbow-delimiters.setup").setup({
+		condition = function(bufnr)
+			return not require("config.bigfile").is_large(bufnr)
+		end,
 		strategy = {
 			[""] = rainbow_delimiters.strategy["global"],
 			vim = rainbow_delimiters.strategy["local"],
