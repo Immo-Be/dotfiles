@@ -12,4 +12,14 @@
 
 set -euo pipefail
 
-open -na Ghostty.app --args -e /bin/zsh -lic yazi
+osascript <<'APPLESCRIPT'
+tell application "/Applications/Ghostty.app"
+  activate
+
+  set cfg to new surface configuration
+  set initial input of cfg to "yazi\n"
+  set win to new window with configuration cfg
+
+  activate window win
+end tell
+APPLESCRIPT
